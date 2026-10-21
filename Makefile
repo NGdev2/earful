@@ -3,7 +3,8 @@ SRC := gnome-extension
 DIST := dist
 INSTALL_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
-.PHONY: all schemas pack install uninstall nested lint clean
+.PHONY: all schemas pack install uninstall nested lint clean \
+	bridge-install bridge-uninstall bridge-test bridge-test-browser
 
 all: pack
 
@@ -29,6 +30,21 @@ nested: install
 	XDG_CONFIG_HOME=$$(mktemp -d) dbus-run-session -- sh -c '\
 		gsettings set org.gnome.shell enabled-extensions "[\"$(UUID)\"]"; \
 		MUTTER_DEBUG_DUMMY_MODE_SPECS=1366x768 gnome-shell --nested --wayland'
+
+# Browser bridge: one MPRIS player per Chromium tab (see native-host/).
+bridge-install:
+	native-host/install.sh
+
+bridge-uninstall:
+	native-host/install.sh --uninstall
+
+# Runs on a private D-Bus session; never touches your real one.
+bridge-test:
+	gjs -m native-host/test-host.js
+
+# Same, plus a throwaway headless Chromium / Chrome profile.
+bridge-test-browser:
+	python3 native-host/test-browser.py
 
 lint:
 	npx --yes eslint@9.13.0 $(SRC) tools

@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Earful Bridge",
+  "short_name": "Earful",
+  "version": "0.1.0",
+  "description": "Shows every browser tab that plays media as its own player in the Earful GNOME extension. Nothing leaves your computer.",
+  "homepage_url": "https://github.com/NGdev2/earful",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjGVX0lVn/THAASENjVXtidJ/ZPHqsnF5IEFrSnOxLXVwV0gZ5OLPdbZDZhGrnV+8Mn6z1TZ/7oqlmn0jfmomLTtm57s7pup4ioEgQjjPQa9+26P8G6AGlxC9ngliml6qfluGCF33nfhVwnOQeNcZpgOwE5NORB/8cAmZT5cjuZu8R4ZxSJ3LPrhl7sQqVu7R3DeWznb2BLsYfHB/BtL1ZPYQGzazjYPk8xYj6kUOn9Z22pH3htz8ulEYhD219Qq1muV4nrjuaH/D6HWEFkwipiL8YghtlceKEWIMOXmmRANV6iuOz0rXgZ1PyJWdfzthRjeOzvt8gAwIHY6n0lg5zwIDAQAB",
+  "minimum_chrome_version": "111",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["nativeMessaging"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/page.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/relay.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ]
+}
