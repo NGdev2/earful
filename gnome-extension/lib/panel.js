@@ -8,6 +8,7 @@ import St from 'gi://St';
 
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -22,11 +23,120 @@ function controlButton(iconName, onClick) {
     return button;
 }
 
+/** A small volume slider for a player's MPRIS volume or a set of streams. */
+const VolumeSlider = GObject.registerClass(
+class VolumeSlider extends St.BoxLayout {
+    _init(audio) {
+        super._init({
+            style_class: 'earful-volume',
+            x_expand: true,
+            visible: false,
+        });
+        this._audio = audio;
+        this._player = null;
+        this._streams = [];
+        this._dragging = false;
+        this._updating = false;
+
+        this._icon = new St.Icon({
+            style_class: 'earful-volume-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this.add_child(this._icon);
+
+        this._slider = new Slider.Slider(0);
+        this._slider.accessible_name = _('Volume');
+        this._slider.y_align = Clutter.ActorAlign.CENTER;
+        // External changes don't move the handle while it is dragged.
+        this._slider.connectObject(
+            'notify::value', () => this._onSliderChanged(),
+            'drag-begin', () => (this._dragging = true),
+            'drag-end', () => {
+                this._dragging = false;
+                this.sync();
+            },
+            this);
+        this.add_child(this._slider);
+
+        this.connect('destroy', () => this._bind(null, []));
+    }
+
+    bindPlayer(player) {
+        this._bind(player, []);
+    }
+
+    bindStreams(streams) {
+        this._bind(null, streams);
+    }
+
+    _bind(player, streams) {
+        const same = player === this._player &&
+            streams.length === this._streams.length &&
+            streams.every((s, i) => s === this._streams[i]);
+        if (!same) {
+            for (const stream of this._streams)
+                stream.disconnectObject(this);
+            this._player = player;
+            this._streams = streams;
+            for (const stream of streams) {
+                stream.connectObject(
+                    'notify::volume', () => this.sync(),
+                    'notify::is-muted', () => this.sync(),
+                    this);
+            }
+        }
+        this.sync();
+    }
+
+    _read() {
+        if (this._player)
+            return this._player.volume;
+        if (this._streams.length > 0)
+            return this._audio.getVolume(this._streams);
+        return null;
+    }
+
+    sync() {
+        const value = this._read();
+        this.visible = value !== null;
+        if (value === null || this._dragging)
+            return;
+        this._updating = true;
+        this._slider.value = value;
+        this._updating = false;
+        this._syncIcon(value);
+    }
+
+    _onSliderChanged() {
+        if (this._updating)
+            return;
+        const {value} = this._slider;
+        if (this._player)
+            this._player.setVolume(value);
+        else
+            this._audio.setVolume(this._streams, value);
+        this._syncIcon(value);
+    }
+
+    _syncIcon(value) {
+        let level = 'high';
+        if (value <= 0)
+            level = 'muted';
+        else if (value < 1 / 3)
+            level = 'low';
+        else if (value < 2 / 3)
+            level = 'medium';
+        this._icon.icon_name = `audio-volume-${level}-symbolic`;
+    }
+});
+
 const PlayerItem = GObject.registerClass(
 class PlayerItem extends PopupMenu.PopupBaseMenuItem {
-    _init(player) {
+    _init(player, audio, settings) {
         super._init({style_class: 'earful-player'});
         this.player = player;
+        this._audio = audio;
+        this._settings = settings;
 
         this._art = new St.Icon({
             style_class: 'earful-art',
@@ -46,9 +156,25 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
         text.add_child(this._source);
         text.add_child(this._title);
         text.add_child(this._artist);
+        this._volume = new VolumeSlider(audio);
+        text.add_child(this._volume);
         this.add_child(text);
 
         const controls = new St.BoxLayout({style_class: 'earful-controls'});
+        // Shown only when media keys go to a pinned player.
+        this._pin = new St.Button({
+            style_class: 'earful-control earful-pin',
+            can_focus: true,
+            toggle_mode: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: _('Media keys control this player'),
+            child: new St.Icon({icon_name: 'view-pin-symbolic'}),
+        });
+        this._pin.connect('clicked', () => {
+            settings.set_string('media-keys-pinned',
+                this._pin.checked ? player.appKey : '');
+        });
+        controls.add_child(this._pin);
         this._prev = controlButton('media-skip-backward-symbolic',
             () => player.previous());
         this._playPause = controlButton('media-playback-start-symbolic',
@@ -64,7 +190,28 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             'changed', () => this._sync(),
             'closed', () => this.destroy(),
             this);
+        audio.connectObject('changed', () => this._syncVolume(), this);
+        settings.connectObject(
+            'changed::media-keys-target', () => this._syncPin(),
+            'changed::media-keys-pinned', () => this._syncPin(),
+            this);
         this._sync();
+        this._syncPin();
+    }
+
+    _syncVolume() {
+        // The player's own volume if it has one, else its mixer streams.
+        if (this.player.volume !== null)
+            this._volume.bindPlayer(this.player);
+        else
+            this._volume.bindStreams(this._audio.streamsFor(this.player));
+    }
+
+    _syncPin() {
+        this._pin.visible =
+            this._settings.get_string('media-keys-target') === 'pinned';
+        this._pin.checked =
+            this._settings.get_string('media-keys-pinned') === this.player.appKey;
     }
 
     _sync() {
@@ -86,6 +233,8 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             this.add_style_pseudo_class('playing');
         else
             this.remove_style_pseudo_class('playing');
+
+        this._syncVolume();
     }
 
     activate(event) {
@@ -94,14 +243,64 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
     }
 });
 
+/** An app that plays sound but is not a player: name, icon and volume. */
+const AudioAppItem = GObject.registerClass(
+class AudioAppItem extends PopupMenu.PopupBaseMenuItem {
+    _init(audio, entry) {
+        // Clicking raises the app when we know which one it is.
+        super._init({
+            style_class: 'earful-player earful-audio-app',
+            activate: entry.app !== null,
+            hover: entry.app !== null,
+        });
+
+        this._icon = new St.Icon({
+            style_class: 'earful-app-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this.add_child(this._icon);
+
+        const text = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            style_class: 'earful-text',
+        });
+        this._name = new St.Label({style_class: 'earful-title'});
+        this._volume = new VolumeSlider(audio);
+        text.add_child(this._name);
+        text.add_child(this._volume);
+        this.add_child(text);
+
+        this.update(entry);
+    }
+
+    get entry() {
+        return this._entry;
+    }
+
+    update(entry) {
+        this._entry = entry;
+        this._icon.gicon = entry.gicon;
+        this._name.text = entry.name;
+        this._volume.bindStreams(entry.streams);
+    }
+
+    activate(event) {
+        this._entry.app?.activate();
+        super.activate(event);
+    }
+});
+
 export const EarfulIndicator = GObject.registerClass(
 class EarfulIndicator extends PanelMenu.Button {
-    _init(extension, manager) {
+    _init(extension, manager, audio) {
         super._init(0.5, 'Earful');
 
         this._extension = extension;
         this._settings = extension.getSettings();
         this._manager = manager;
+        this._audio = audio;
 
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this._icon = new St.Icon({
@@ -121,6 +320,16 @@ class EarfulIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(this._section);
         this.menu.box.add_style_class_name('earful-menu');
 
+        // Apps that play sound without being a player (games, calls).
+        this._othersSection = new PopupMenu.PopupMenuSection();
+        this._othersSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        const othersTitle = new PopupMenu.PopupMenuItem(_('Other audio'),
+            {reactive: false});
+        othersTitle.add_style_class_name('earful-section-title');
+        this._othersSection.addMenuItem(othersTitle);
+        this.menu.addMenuItem(this._othersSection);
+        this._otherItems = new Map();
+
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         this._focusSwitch = new PopupMenu.PopupSwitchMenuItem(
             _('Focus mode (no popups)'), this._settings.get_boolean('focus-mode'));
@@ -135,7 +344,9 @@ class EarfulIndicator extends PanelMenu.Button {
             'changed::show-panel-label', () => this._syncPanel(),
             'changed::panel-label-max-chars', () => this._syncPanel(),
             'changed::hide-when-idle', () => this._syncPanel(),
+            'changed::show-audio-only-apps', () => this._syncOthers(),
             this);
+        audio.connectObject('changed', () => this._syncOthers(), this);
 
         this._watched = new Set();
         manager.connectObject(
@@ -147,9 +358,11 @@ class EarfulIndicator extends PanelMenu.Button {
         this.menu.connectObject('open-state-changed', (menu, open) => {
             if (open || this._dirty)
                 this._rebuild();
+            this._syncOthers();
         }, this);
 
         this._rebuild();
+        this._syncOthers();
     }
 
     get earfulIcon() {
@@ -196,7 +409,7 @@ class EarfulIndicator extends PanelMenu.Button {
 
         const players = this._manager.players;
         for (const player of players)
-            this._section.addMenuItem(new PlayerItem(player));
+            this._section.addMenuItem(new PlayerItem(player, this._audio, this._settings));
 
         if (players.length === 0) {
             const empty = new PopupMenu.PopupMenuItem(_('Nothing is playing'),
@@ -206,6 +419,36 @@ class EarfulIndicator extends PanelMenu.Button {
         }
 
         this._syncPanel();
+    }
+
+    _syncOthers() {
+        const apps = this._settings.get_boolean('show-audio-only-apps')
+            ? this._audio.otherApps : [];
+        const entries = new Map(apps.map(a => [a.key, a]));
+        // While the menu is open rows only update in place, like players:
+        // gone apps lose their slider, new ones wait for the next open.
+        const open = this.menu.isOpen;
+
+        for (const [key, item] of this._otherItems) {
+            if (entries.has(key)) {
+                item.update(entries.get(key));
+            } else if (open) {
+                item.update({...item.entry, streams: []});
+            } else {
+                item.destroy();
+                this._otherItems.delete(key);
+            }
+        }
+        if (!open) {
+            for (const entry of apps) {
+                if (this._otherItems.has(entry.key))
+                    continue;
+                const item = new AudioAppItem(this._audio, entry);
+                this._othersSection.addMenuItem(item);
+                this._otherItems.set(entry.key, item);
+            }
+        }
+        this._othersSection.actor.visible = this._otherItems.size > 0;
     }
 
     _syncPanel() {
@@ -232,6 +475,8 @@ class EarfulIndicator extends PanelMenu.Button {
             GLib.source_remove(this._rebuildId);
         this._settings.disconnectObject(this);
         this._manager.disconnectObject(this);
+        this._audio.disconnectObject(this);
+        this._otherItems.clear();
         for (const player of this._watched)
             player.disconnectObject(this);
         this._watched.clear();

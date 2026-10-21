@@ -4,17 +4,23 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {AudioManager} from './lib/audio.js';
+import {MediaKeys} from './lib/mediaKeys.js';
 import {PlayerManager} from './lib/mpris.js';
 import {EarfulIndicator} from './lib/panel.js';
+import {PauseOthers} from './lib/pauseOthers.js';
 import {ToastManager} from './lib/toasts.js';
 
 export default class EarfulExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._manager = new PlayerManager();
+        this._audio = new AudioManager(this._manager);
         this._toasts = new ToastManager(this._settings, this._manager);
+        this._pauseOthers = new PauseOthers(this._settings, this._manager);
+        this._mediaKeys = new MediaKeys(this._settings, this._manager);
 
-        this._indicator = new EarfulIndicator(this, this._manager);
+        this._indicator = new EarfulIndicator(this, this._manager, this._audio);
         Main.panel.addToStatusArea(this.uuid, this._indicator, 0, 'right');
 
         Main.wm.addKeybinding('toggle-focus-mode', this._settings,
@@ -40,8 +46,14 @@ export default class EarfulExtension extends Extension {
 
         this._indicator.destroy();
         this._indicator = null;
+        this._mediaKeys.destroy();
+        this._mediaKeys = null;
+        this._pauseOthers.destroy();
+        this._pauseOthers = null;
         this._toasts.destroy();
         this._toasts = null;
+        this._audio.destroy();
+        this._audio = null;
         this._manager.destroy();
         this._manager = null;
         this._settings = null;

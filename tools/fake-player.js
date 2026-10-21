@@ -5,6 +5,9 @@
 //   name               bus name suffix and identity (default: FakePlayer)
 //   seconds-per-track  auto-advance interval, 0 to disable (default: 8)
 //   art-dir            optional folder with images used as cover art
+//
+// Set FAKE_PLAYER_NO_VOLUME=1 to leave out the MPRIS Volume property, like
+// players whose volume Earful has to find in the sound mixer.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -12,6 +15,7 @@ import {programArgs} from 'system';
 
 const [name = 'FakePlayer', secondsArg = '8', artDir = ''] = programArgs;
 const seconds = Number(secondsArg);
+const hasVolume = !GLib.getenv('FAKE_PLAYER_NO_VOLUME');
 
 const TRACKS = [
     ['Midnight Compiler', 'The Semicolons', 'Build Passing'],
@@ -62,11 +66,13 @@ const PLAYER_IFACE = `
     <property name="CanPlay" type="b" access="read"/>
     <property name="CanPause" type="b" access="read"/>
     <property name="CanControl" type="b" access="read"/>
+    ${hasVolume ? '<property name="Volume" type="d" access="readwrite"/>' : ''}
   </interface>
 </node>`;
 
 let index = 0;
 let status = 'Playing';
+let volume = 1.0;
 
 const player = {
     CanRaise: true,
@@ -81,6 +87,16 @@ const player = {
     CanPlay: true,
     CanPause: true,
     CanControl: true,
+
+    get Volume() {
+        return volume;
+    },
+
+    set Volume(value) {
+        volume = Math.min(Math.max(value, 0), 1);
+        print(`${name}: volume ${volume.toFixed(2)}`);
+        notify(['Volume']);
+    },
 
     get PlaybackStatus() {
         return status;
@@ -130,9 +146,13 @@ const exportedPlayer = Gio.DBusExportedObject.wrapJSObject(PLAYER_IFACE, player)
 
 function notify(props) {
     for (const prop of props) {
-        const value = prop === 'Metadata'
-            ? new GLib.Variant('a{sv}', player.Metadata)
-            : new GLib.Variant('s', player[prop]);
+        let value;
+        if (prop === 'Metadata')
+            value = new GLib.Variant('a{sv}', player.Metadata);
+        else if (prop === 'Volume')
+            value = new GLib.Variant('d', volume);
+        else
+            value = new GLib.Variant('s', player[prop]);
         exportedPlayer.emit_property_changed(prop, value);
     }
     exportedPlayer.flush();

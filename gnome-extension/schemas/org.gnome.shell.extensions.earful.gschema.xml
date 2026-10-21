@@ -70,6 +70,36 @@
       <default>false</default>
       <summary>Hide the top bar button when nothing is playing</summary>
     </key>
+    <key name="show-audio-only-apps" type="b">
+      <default>false</default>
+      <summary>List apps that play sound but are not players (games, calls)</summary>
+    </key>
+
+    <!-- Playback -->
+    <key name="pause-others" type="b">
+      <default>false</default>
+      <summary>Pause other players when one starts playing</summary>
+    </key>
+    <key name="pause-others-exceptions" type="as">
+      <default>[]</default>
+      <summary>Players that are never paused by another one starting</summary>
+    </key>
+
+    <!-- Media keys -->
+    <key name="media-keys-target" type="s">
+      <choices>
+        <choice value="default"/>
+        <choice value="last-active"/>
+        <choice value="pinned"/>
+      </choices>
+      <default>'default'</default>
+      <summary>Which player the media keys control</summary>
+      <description>'default' leaves the choice to the system.</description>
+    </key>
+    <key name="media-keys-pinned" type="s">
+      <default>''</default>
+      <summary>Player the media keys control when pinned</summary>
+    </key>
 
   </schema>
 </schemalist>

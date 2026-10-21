@@ -15,6 +15,12 @@ const POSITIONS = [
     ['bottom-right', () => _('Bottom right')],
 ];
 
+const MEDIA_KEY_TARGETS = [
+    ['default', () => _('Let the system choose')],
+    ['last-active', () => _('Last active player')],
+    ['pinned', () => _('Pinned player')],
+];
+
 function switchRow(settings, key, title, subtitle = '') {
     const row = new Adw.SwitchRow({title, subtitle});
     settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
@@ -27,6 +33,25 @@ function spinRow(settings, key, title, lower, upper) {
         adjustment: new Gtk.Adjustment({lower, upper, step_increment: 1}),
     });
     settings.bind(key, row, 'value', Gio.SettingsBindFlags.DEFAULT);
+    return row;
+}
+
+/** A drop-down for a string key with fixed choices, as [id, label] pairs. */
+function choiceRow(window, settings, key, title, choices, subtitle = '') {
+    const row = new Adw.ComboRow({
+        title,
+        subtitle,
+        model: Gtk.StringList.new(choices.map(([, label]) => label())),
+    });
+    const sync = () => {
+        row.selected = Math.max(0,
+            choices.findIndex(([id]) => id === settings.get_string(key)));
+    };
+    sync();
+    const id = settings.connect(`changed::${key}`, sync);
+    window.connect('close-request', () => settings.disconnect(id));
+    row.connect('notify::selected', () =>
+        settings.set_string(key, choices[row.selected][0]));
     return row;
 }
 
@@ -62,6 +87,37 @@ async function runningPlayers() {
     return players;
 }
 
+/**
+ * One switch per player, adding or removing its appKey in a string list.
+ * `onWhenListed` tells whether a listed player shows as switched on.
+ */
+function addPlayerSwitches(group, settings, key, running, onWhenListed) {
+    const known = new Map(running);
+    for (const appKey of settings.get_strv(key)) {
+        if (!known.has(appKey))
+            known.set(appKey, appKey);
+    }
+    if (known.size === 0)
+        group.add(new Adw.ActionRow({title: _('No players running right now')}));
+
+    for (const [appKey, name] of known) {
+        const listed = settings.get_strv(key).includes(appKey);
+        const row = new Adw.SwitchRow({
+            title: GLib.markup_escape_text(name, -1),
+            active: listed === onWhenListed,
+        });
+        row.connect('notify::active', () => {
+            const list = new Set(settings.get_strv(key));
+            if (row.active === onWhenListed)
+                list.add(appKey);
+            else
+                list.delete(appKey);
+            settings.set_strv(key, [...list]);
+        });
+        group.add(row);
+    }
+}
+
 export default class EarfulPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
@@ -78,22 +134,7 @@ export default class EarfulPreferences extends ExtensionPreferences {
         page.add(popups);
 
         popups.add(switchRow(settings, 'toasts-enabled', _('Show popups')));
-
-        const position = new Adw.ComboRow({
-            title: _('Position'),
-            model: Gtk.StringList.new(POSITIONS.map(([, label]) => label())),
-        });
-        const syncPosition = () => {
-            position.selected = Math.max(0,
-                POSITIONS.findIndex(([id]) => id === settings.get_string('toast-position')));
-        };
-        syncPosition();
-        const positionId = settings.connect('changed::toast-position', syncPosition);
-        window.connect('close-request', () => settings.disconnect(positionId));
-        position.connect('notify::selected', () =>
-            settings.set_string('toast-position', POSITIONS[position.selected][0]));
-        popups.add(position);
-
+        popups.add(choiceRow(window, settings, 'toast-position', _('Position'), POSITIONS));
         popups.add(spinRow(settings, 'toast-duration', _('Seconds on screen'), 2, 30));
         popups.add(spinRow(settings, 'toast-max-visible', _('Maximum at once'), 1, 6));
         popups.add(switchRow(settings, 'toast-hide-when-app-focused',
@@ -142,6 +183,27 @@ export default class EarfulPreferences extends ExtensionPreferences {
         panel.add(spinRow(settings, 'panel-label-max-chars', _('Label length'), 10, 80));
         panel.add(switchRow(settings, 'hide-when-idle',
             _('Hide the button when nothing is playing')));
+        panel.add(switchRow(settings, 'show-audio-only-apps',
+            _('Show other apps playing sound'),
+            _('Games, calls and other apps that are not players, each with a volume slider.')));
+
+        // Playback
+        const playback = new Adw.PreferencesGroup({title: _('Playback')});
+        page.add(playback);
+        playback.add(switchRow(settings, 'pause-others',
+            _('Pause others when one starts'),
+            _('Only one player plays at a time, except the ones you keep below.')));
+        playback.add(choiceRow(window, settings, 'media-keys-target',
+            _('Media keys control'), MEDIA_KEY_TARGETS,
+            _('Pin a player from its row in the top bar menu.')));
+
+        // Pause others: exceptions
+        const keep = new Adw.PreferencesGroup({
+            title: _('Keep playing'),
+            description: _('These players are never paused when another one starts.'),
+        });
+        settings.bind('pause-others', keep, 'sensitive', Gio.SettingsBindFlags.GET);
+        page.add(keep);
 
         // Per app
         const apps = new Adw.PreferencesGroup({
@@ -150,33 +212,13 @@ export default class EarfulPreferences extends ExtensionPreferences {
         });
         page.add(apps);
 
-        this._fillPlayers(apps, settings).catch(e =>
+        this._fillPlayers(settings, keep, apps).catch(e =>
             logError(e, 'Earful: could not list players'));
     }
 
-    async _fillPlayers(group, settings) {
-        const known = await runningPlayers();
-        for (const key of settings.get_strv('toast-muted-apps')) {
-            if (!known.has(key))
-                known.set(key, key);
-        }
-        if (known.size === 0) {
-            group.add(new Adw.ActionRow({title: _('No players running right now')}));
-        }
-        for (const [key, name] of known) {
-            const row = new Adw.SwitchRow({
-                title: GLib.markup_escape_text(name, -1),
-                active: !settings.get_strv('toast-muted-apps').includes(key),
-            });
-            row.connect('notify::active', () => {
-                const muted = new Set(settings.get_strv('toast-muted-apps'));
-                if (row.active)
-                    muted.delete(key);
-                else
-                    muted.add(key);
-                settings.set_strv('toast-muted-apps', [...muted]);
-            });
-            group.add(row);
-        }
+    async _fillPlayers(settings, keep, apps) {
+        const running = await runningPlayers();
+        addPlayerSwitches(keep, settings, 'pause-others-exceptions', running, true);
+        addPlayerSwitches(apps, settings, 'toast-muted-apps', running, false);
     }
 }

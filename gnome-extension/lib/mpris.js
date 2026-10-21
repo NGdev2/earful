@@ -8,6 +8,10 @@ import * as Signals from 'resource:///org/gnome/shell/misc/signals.js';
 
 const MPRIS_PREFIX = 'org.mpris.MediaPlayer2.';
 const MPRIS_PATH = '/org/mpris/MediaPlayer2';
+const PLAYER_IFACE = 'org.mpris.MediaPlayer2.Player';
+
+// Players from Earful's own browser bridge; they implement Volume properly.
+const BRIDGE_PREFIX = `${MPRIS_PREFIX}earful_tab_`;
 
 const DBusIface = `
 <node>
@@ -41,12 +45,15 @@ const MprisPlayerIface = `
     <method name="Pause"/>
     <method name="Next"/>
     <method name="Previous"/>
+    <method name="Stop"/>
     <property name="PlaybackStatus" type="s" access="read"/>
     <property name="Metadata" type="a{sv}" access="read"/>
     <property name="CanGoNext" type="b" access="read"/>
     <property name="CanGoPrevious" type="b" access="read"/>
     <property name="CanPlay" type="b" access="read"/>
     <property name="CanPause" type="b" access="read"/>
+    <property name="CanControl" type="b" access="read"/>
+    <property name="Volume" type="d" access="readwrite"/>
   </interface>
 </node>`;
 
@@ -66,6 +73,21 @@ const BROWSER_INSTANCE = /^org\.mpris\.MediaPlayer2\.[^.]+\.instance(\d+)$/;
 // Cover art is loaded by the shell itself, so only allow local files and web URLs.
 const ART_URL = /^(file|https?):\/\//;
 
+/** Promise wrapper for an async D-Bus method call. */
+function dbusCall(name, path, iface, method, params, replyType, cancellable) {
+    return new Promise((resolve, reject) => {
+        Gio.DBus.session.call(name, path, iface, method, params,
+            new GLib.VariantType(replyType), Gio.DBusCallFlags.NONE, -1,
+            cancellable, (bus, res) => {
+                try {
+                    resolve(bus.call_finish(res).deepUnpack());
+                } catch (e) {
+                    reject(e);
+                }
+            });
+    });
+}
+
 function asString(value) {
     return typeof value === 'string' ? value : '';
 }
@@ -84,6 +106,7 @@ function asStringList(value) {
  * Signals:
  *  - 'changed': any state or metadata change
  *  - 'track-changed': a new track started playing (worth announcing)
+ *  - 'started': playback went from not playing to playing
  *  - 'closed': the player went away
  */
 export class Player extends Signals.EventEmitter {
@@ -104,12 +127,17 @@ export class Player extends Signals.EventEmitter {
         this.canGoPrevious = false;
         this.canPlay = false;
         this.lastActive = 0;
+        this.startedAt = 0;
+        // MPRIS volume (0..1), only when the player really lets us set it.
+        this.volume = null;
 
         // Whatever a player was playing when we found it stays silent;
         // every track after that is announced.
         this._announce = announce;
         this._initialized = false;
         this._pendingAnnounce = false;
+        this._volumeWritable = false;
+        this._volumeFailed = false;
         this._cancellable = new Gio.Cancellable();
 
         this._init().catch(e => {
@@ -128,11 +156,44 @@ export class Player extends Signals.EventEmitter {
             this.app = Shell.AppSystem.get_default()
                 .lookup_app(`${this.desktopEntry}.desktop`);
         }
+        await Promise.all([this._findAppByPid(), this._checkVolume()]);
 
         this._playerProxy.connectObject('g-properties-changed',
             () => this._update(), this);
 
         this._update();
+    }
+
+    async _findAppByPid() {
+        // Some players (e.g. Chrome) have no DesktopEntry; their windows
+        // still tell which app they are.
+        if (this.app)
+            return;
+        try {
+            const [pid] = await dbusCall('org.freedesktop.DBus',
+                '/org/freedesktop/DBus', 'org.freedesktop.DBus',
+                'GetConnectionUnixProcessID', new GLib.Variant('(s)', [this.busName]),
+                '(u)', this._cancellable);
+            this.app = Shell.WindowTracker.get_default().get_app_from_pid(pid);
+        } catch {}
+    }
+
+    async _checkVolume() {
+        // Many players expose Volume but ignore writes (Chrome always says
+        // 1.0), so only trust it when declared writable.
+        if (this.isBridge) {
+            this._volumeWritable = true;
+            return;
+        }
+        try {
+            const [xml] = await dbusCall(this.busName, MPRIS_PATH,
+                'org.freedesktop.DBus.Introspectable', 'Introspect', null,
+                '(s)', this._cancellable);
+            const prop = Gio.DBusNodeInfo.new_for_xml(xml)
+                .lookup_interface(PLAYER_IFACE)?.lookup_property('Volume');
+            this._volumeWritable =
+                !!(prop && prop.flags & Gio.DBusPropertyInfoFlags.WRITABLE);
+        } catch {}
     }
 
     _makeProxy(ProxyClass) {
@@ -146,6 +207,11 @@ export class Player extends Signals.EventEmitter {
     /** Stable key used to remember per-app preferences. */
     get appKey() {
         return (this.desktopEntry || this.identity || this.busName).toLowerCase();
+    }
+
+    /** One tab of a browser, from Earful's browser bridge. */
+    get isBridge() {
+        return this.busName.startsWith(BRIDGE_PREFIX);
     }
 
     /** Human readable source, e.g. "Spotify" or "Chromium". */
@@ -183,6 +249,7 @@ export class Player extends Signals.EventEmitter {
         for (const [key, value] of Object.entries(proxy.Metadata ?? {}))
             metadata[key] = value.deepUnpack();
 
+        const wasPlaying = this.isPlaying;
         this.status = proxy.PlaybackStatus ?? 'Stopped';
         this.title = asString(metadata['xesam:title']);
         this.artists = asStringList(metadata['xesam:artist']);
@@ -192,8 +259,18 @@ export class Player extends Signals.EventEmitter {
         this.canGoPrevious = proxy.CanGoPrevious ?? false;
         this.canPlay = proxy.CanPlay ?? false;
 
+        const volume = proxy.Volume;
+        this.volume = this._volumeWritable && !this._volumeFailed &&
+            proxy.CanControl !== false && typeof volume === 'number'
+            ? Math.clamp(volume, 0, 1) : null;
+
+        // Players already playing when we start up did not just start.
+        const started = this.isPlaying && !wasPlaying &&
+            (this._initialized || this._announce);
         if (this.isPlaying)
             this.lastActive = GLib.get_monotonic_time();
+        if (started)
+            this.startedAt = this.lastActive;
 
         const key = this.title
             ? [this.title, ...this.artists, this.album].join('\u0001')
@@ -207,6 +284,8 @@ export class Player extends Signals.EventEmitter {
         // Announce a new track once it actually plays, so pausing,
         // resuming or browsing a paused player stays quiet.
         this.emit('changed');
+        if (started)
+            this.emit('started');
         if (this._pendingAnnounce && this.isPlaying) {
             this._pendingAnnounce = false;
             this.emit('track-changed');
@@ -221,12 +300,35 @@ export class Player extends Signals.EventEmitter {
         this._playerProxy?.PauseAsync().catch(logError);
     }
 
+    stop() {
+        this._playerProxy?.StopAsync().catch(logError);
+    }
+
     next() {
         this._playerProxy?.NextAsync().catch(logError);
     }
 
     previous() {
         this._playerProxy?.PreviousAsync().catch(logError);
+    }
+
+    setVolume(value) {
+        if (this.volume === null)
+            return;
+        this._playerProxy.call('org.freedesktop.DBus.Properties.Set',
+            new GLib.Variant('(ssv)',
+                [PLAYER_IFACE, 'Volume', new GLib.Variant('d', value)]),
+            Gio.DBusCallFlags.NONE, -1, this._cancellable, (proxy, res) => {
+                try {
+                    proxy.call_finish(res);
+                } catch (e) {
+                    if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        return;
+                    // Declared writable but refused: fall back to the mixer.
+                    this._volumeFailed = true;
+                    this._update();
+                }
+            });
     }
 
     /** Bring the player (and, for browsers, its tab) to the front. */
