@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="earful">
+  <schema id="org.gnome.shell.extensions.earful" path="/org/gnome/shell/extensions/earful/">
+
+    <!-- Now playing popups -->
+    <key name="toasts-enabled" type="b">
+      <default>true</default>
+      <summary>Show a popup when a track changes</summary>
+    </key>
+    <key name="toast-position" type="s">
+      <choices>
+        <choice value="top-left"/>
+        <choice value="top-center"/>
+        <choice value="top-right"/>
+        <choice value="bottom-left"/>
+        <choice value="bottom-center"/>
+        <choice value="bottom-right"/>
+      </choices>
+      <default>'top-right'</default>
+      <summary>Where popups appear</summary>
+    </key>
+    <key name="toast-duration" type="i">
+      <range min="2" max="30"/>
+      <default>5</default>
+      <summary>Seconds a popup stays before fading out</summary>
+    </key>
+    <key name="toast-max-visible" type="i">
+      <range min="1" max="6"/>
+      <default>3</default>
+      <summary>Maximum popups shown at once</summary>
+    </key>
+    <key name="toast-hide-when-app-focused" type="b">
+      <default>true</default>
+      <summary>No popup when the player's window is focused</summary>
+    </key>
+    <key name="toast-hide-in-fullscreen" type="b">
+      <default>true</default>
+      <summary>No popups over fullscreen windows (games, videos)</summary>
+    </key>
+    <key name="toast-respect-dnd" type="b">
+      <default>true</default>
+      <summary>No popups while Do Not Disturb is on</summary>
+    </key>
+    <key name="toast-muted-apps" type="as">
+      <default>[]</default>
+      <summary>Players that never show popups</summary>
+    </key>
+
+    <!-- Focus mode -->
+    <key name="focus-mode" type="b">
+      <default>false</default>
+      <summary>Focus mode: hide all popups</summary>
+    </key>
+    <key name="toggle-focus-mode" type="as">
+      <default><![CDATA[['<Super><Shift>m']]]></default>
+      <summary>Shortcut to toggle focus mode</summary>
+    </key>
+
+    <!-- Top bar -->
+    <key name="show-panel-label" type="b">
+      <default>false</default>
+      <summary>Show the current track next to the icon</summary>
+    </key>
+    <key name="panel-label-max-chars" type="i">
+      <range min="10" max="80"/>
+      <default>32</default>
+      <summary>Maximum length of the top bar label</summary>
+    </key>
+    <key name="hide-when-idle" type="b">
+      <default>false</default>
+      <summary>Hide the top bar button when nothing is playing</summary>
+    </key>
+
+  </schema>
+</schemalist>

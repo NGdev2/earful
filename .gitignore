@@ -1,0 +1,13 @@
+dist/
+*.compiled
+node_modules/
+*.zip
+*.log
+.vscode/
+.idea/
+.env
+.env.*
+*.pem
+*.key
+*.crx
+.claude/

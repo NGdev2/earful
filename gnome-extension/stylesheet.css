@@ -1,0 +1,102 @@
+/* Top bar menu */
+
+.earful-menu {
+  min-width: 360px;
+}
+
+.earful-player {
+  spacing: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.earful-player:playing .earful-title {
+  font-weight: bold;
+}
+
+.earful-art {
+  icon-size: 48px;
+  border-radius: 8px;
+}
+
+.earful-text {
+  spacing: 1px;
+}
+
+.earful-source {
+  font-size: 0.8em;
+  opacity: 0.65;
+}
+
+.earful-title {
+  max-width: 200px;
+}
+
+.earful-artist {
+  font-size: 0.9em;
+  opacity: 0.8;
+  max-width: 200px;
+}
+
+.earful-controls {
+  spacing: 2px;
+}
+
+.earful-control {
+  padding: 6px;
+  border-radius: 99px;
+}
+
+.earful-control:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.earful-control StIcon {
+  icon-size: 16px;
+}
+
+.earful-empty {
+  opacity: 0.65;
+}
+
+.earful-panel-label {
+  padding-left: 6px;
+}
+
+/* Now playing popups */
+
+.earful-toast {
+  background-color: rgba(30, 30, 34, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  color: #f2f2f2;
+}
+
+.earful-toast:hover {
+  background-color: rgba(42, 42, 48, 0.95);
+}
+
+.earful-toast-box {
+  spacing: 12px;
+}
+
+.earful-toast-art {
+  icon-size: 56px;
+  border-radius: 10px;
+}
+
+.earful-toast-source {
+  font-size: 0.8em;
+  opacity: 0.6;
+}
+
+.earful-toast-title {
+  font-weight: bold;
+}
+
+.earful-toast-artist {
+  font-size: 0.9em;
+  opacity: 0.85;
+}
