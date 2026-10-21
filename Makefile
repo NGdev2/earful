@@ -47,7 +47,7 @@ bridge-test-browser:
 	python3 native-host/test-browser.py
 
 lint:
-	npx --yes eslint@9.13.0 $(SRC) tools
+	npx --yes eslint@9.13.0 $(SRC) tools native-host chromium-extension
 
 clean:
 	rm -rf $(DIST) $(SRC)/schemas/gschemas.compiled

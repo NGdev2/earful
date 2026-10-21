@@ -64,10 +64,8 @@ const sleep = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAUL
 async function waitFor(predicate, timeout = 5000) {
     const end = Date.now() + timeout;
     while (Date.now() < end) {
-        // eslint-disable-next-line no-await-in-loop
         if (await predicate())
             return true;
-        // eslint-disable-next-line no-await-in-loop
         await sleep(25);
     }
     return false;
@@ -130,7 +128,6 @@ async function readExactly(size) {
     const buffer = new Uint8Array(size);
     let offset = 0;
     while (offset < size) {
-        // eslint-disable-next-line no-await-in-loop
         const chunk = (await fromHost.read_bytes_async(size - offset,
             GLib.PRIORITY_DEFAULT, null)).toArray();
         if (!chunk.length)
@@ -143,12 +140,10 @@ async function readExactly(size) {
 
 async function pump() {
     for (;;) {
-        // eslint-disable-next-line no-await-in-loop
         const header = await readExactly(4);
         if (!header)
             return;
         const size = new DataView(header.buffer).getUint32(0, true);
-        // eslint-disable-next-line no-await-in-loop
         inbox.push(JSON.parse(decoder.decode(await readExactly(size))));
     }
 }

@@ -113,6 +113,8 @@ export class ToastManager {
         const s = this._settings;
         if (!s.get_boolean('toasts-enabled') || s.get_boolean('focus-mode'))
             return false;
+        if (this._manager.isShadowed(player))
+            return false;
         if (s.get_strv('toast-muted-apps').includes(player.appKey))
             return false;
         if (s.get_boolean('toast-respect-dnd') &&

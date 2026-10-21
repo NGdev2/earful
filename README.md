@@ -23,13 +23,15 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 
 🧭 **One click, every player** — all your players in one list, each with its own play / pause / next. Click a track to jump straight to its app.
 
+🗂️ **Every browser tab is its own player** — three YouTube tabs, three rows. Click one and Earful switches to that exact tab (Chromium, Chrome, Brave, Edge).
+
 🤫 **Focus mode** — deep in code? One shortcut (<kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>) silences every popup. No popups over fullscreen games or while Do Not Disturb is on.
 
 🎚️ **You decide** — popup position, duration, how many at once, and which players are allowed to show them.
 
 ## Coming next
 
-- 🗂️ **Every browser tab as its own player** — three YouTube tabs, three rows (Chromium first)
+- 🦊 **Firefox** support for the per-tab bridge
 - 🔊 **Volume per player**, plus apps that only play sound (games, calls) like a mini mixer
 - ⏯️ **Pause others when one starts** — optional, with exceptions
 - ⌨️ **Choose which player your media keys control** — last active or pinned
@@ -50,6 +52,14 @@ Then log out and back in (on X11 you can press <kbd>Alt</kbd> + <kbd>F2</kbd>, t
 ```bash
 gnome-extensions enable earful@NGdev2.github.io
 ```
+
+**Per-tab browser players** (optional):
+
+1. `make bridge-install`
+2. Open `chrome://extensions`, turn on *Developer mode*, click *Load unpacked* and pick the `chromium-extension` folder.
+3. Reload tabs that were already playing.
+
+Details: [chromium-extension](chromium-extension/README.md) · [native-host](native-host/README.md)
 
 ## How it works
 

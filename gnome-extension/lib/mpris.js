@@ -58,6 +58,11 @@ function makeProxyClasses() {
     MprisPlayerProxy ??= Gio.DBusProxy.makeProxyWrapper(MprisPlayerIface);
 }
 
+// Players published by our browser bridge, one per tab (see native-host/).
+const BRIDGE_TAB = /^org\.mpris\.MediaPlayer2\.earful_tab_\d+\.instance(\d+)$/;
+// A browser's own single player, e.g. org.mpris.MediaPlayer2.chromium.instance1234.
+const BROWSER_INSTANCE = /^org\.mpris\.MediaPlayer2\.[^.]+\.instance(\d+)$/;
+
 // Cover art is loaded by the shell itself, so only allow local files and web URLs.
 const ART_URL = /^(file|https?):\/\//;
 
@@ -314,10 +319,27 @@ export class PlayerManager extends Signals.EventEmitter {
         return [...this._players.values()];
     }
 
+    /**
+     * True for a browser's own single player while our bridge shows that
+     * browser's tabs one by one; it would only duplicate one of them.
+     */
+    isShadowed(player) {
+        if (BRIDGE_TAB.test(player.busName))
+            return false;
+        const pid = BROWSER_INSTANCE.exec(player.busName)?.[1];
+        if (!pid)
+            return false;
+        for (const name of this._players.keys()) {
+            if (BRIDGE_TAB.exec(name)?.[1] === pid)
+                return true;
+        }
+        return false;
+    }
+
     /** Players that have a track, playing first, then most recently active. */
     get players() {
         return [...this._players.values()]
-            .filter(p => p.hasTrack)
+            .filter(p => p.hasTrack && !this.isShadowed(p))
             .sort((a, b) => (b.isPlaying - a.isPlaying) ||
                 (b.lastActive - a.lastActive));
     }
