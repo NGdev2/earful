@@ -23,14 +23,15 @@ install: pack
 uninstall:
 	rm -rf $(INSTALL_DIR)
 
-# Run a nested GNOME Shell with the extension enabled (GNOME 46-48).
+# Run a nested GNOME Shell with the extension enabled, using throwaway
+# settings so your real session's extension list is untouched (GNOME 46-48).
 nested: install
-	dbus-run-session -- sh -c '\
+	XDG_CONFIG_HOME=$$(mktemp -d) dbus-run-session -- sh -c '\
 		gsettings set org.gnome.shell enabled-extensions "[\"$(UUID)\"]"; \
 		MUTTER_DEBUG_DUMMY_MODE_SPECS=1366x768 gnome-shell --nested --wayland'
 
 lint:
-	eslint $(SRC) tools
+	npx --yes eslint@9.13.0 $(SRC) tools
 
 clean:
 	rm -rf $(DIST) $(SRC)/schemas/gschemas.compiled

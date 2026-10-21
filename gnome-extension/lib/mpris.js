@@ -50,9 +50,16 @@ const MprisPlayerIface = `
   </interface>
 </node>`;
 
-const DBusProxy = Gio.DBusProxy.makeProxyWrapper(DBusIface);
-const MprisProxy = Gio.DBusProxy.makeProxyWrapper(MprisIface);
-const MprisPlayerProxy = Gio.DBusProxy.makeProxyWrapper(MprisPlayerIface);
+let DBusProxy, MprisProxy, MprisPlayerProxy;
+
+function makeProxyClasses() {
+    DBusProxy ??= Gio.DBusProxy.makeProxyWrapper(DBusIface);
+    MprisProxy ??= Gio.DBusProxy.makeProxyWrapper(MprisIface);
+    MprisPlayerProxy ??= Gio.DBusProxy.makeProxyWrapper(MprisPlayerIface);
+}
+
+// Cover art is loaded by the shell itself, so only allow local files and web URLs.
+const ART_URL = /^(file|https?):\/\//;
 
 function asString(value) {
     return typeof value === 'string' ? value : '';
@@ -93,11 +100,11 @@ export class Player extends Signals.EventEmitter {
         this.canPlay = false;
         this.lastActive = 0;
 
-        // Players discovered at startup stay silent; ones that appear
-        // later announce their first track.
+        // Whatever a player was playing when we found it stays silent;
+        // every track after that is announced.
         this._announce = announce;
+        this._initialized = false;
         this._pendingAnnounce = false;
-        this._ready = false;
         this._cancellable = new Gio.Cancellable();
 
         this._init().catch(e => {
@@ -117,20 +124,14 @@ export class Player extends Signals.EventEmitter {
                 .lookup_app(`${this.desktopEntry}.desktop`);
         }
 
-        this._mprisProxy.connectObject('notify::g-name-owner', () => {
-            if (!this._mprisProxy.g_name_owner)
-                this.destroy();
-        }, this);
         this._playerProxy.connectObject('g-properties-changed',
             () => this._update(), this);
 
-        this._ready = true;
         this._update();
     }
 
     _makeProxy(ProxyClass) {
         return new Promise((resolve, reject) => {
-            // eslint-disable-next-line no-new
             new ProxyClass(Gio.DBus.session, this.busName, MPRIS_PATH,
                 (proxy, error) => (error ? reject(error) : resolve(proxy)),
                 this._cancellable);
@@ -149,7 +150,7 @@ export class Player extends Signals.EventEmitter {
 
     /** Cover art if the player provides it, otherwise the app icon. */
     get artIcon() {
-        if (this.artUrl) {
+        if (ART_URL.test(this.artUrl)) {
             try {
                 return new Gio.FileIcon({file: Gio.File.new_for_uri(this.artUrl)});
             } catch {}
@@ -193,10 +194,10 @@ export class Player extends Signals.EventEmitter {
             ? [this.title, ...this.artists, this.album].join('\u0001')
             : null;
         if (key && key !== this.trackKey) {
-            const firstTrack = this.trackKey === null;
             this.trackKey = key;
-            this._pendingAnnounce = !firstTrack || this._announce;
+            this._pendingAnnounce = this._initialized || this._announce;
         }
+        this._initialized = true;
 
         // Announce a new track once it actually plays, so pausing,
         // resuming or browsing a paused player stays quiet.
@@ -238,7 +239,6 @@ export class Player extends Signals.EventEmitter {
         this._destroyed = true;
 
         this._cancellable.cancel();
-        this._mprisProxy?.disconnectObject(this);
         this._playerProxy?.disconnectObject(this);
         this._mprisProxy = null;
         this._playerProxy = null;
@@ -256,6 +256,7 @@ export class PlayerManager extends Signals.EventEmitter {
     constructor() {
         super();
 
+        makeProxyClasses();
         this._players = new Map();
         this._cancellable = new Gio.Cancellable();
 
@@ -267,7 +268,6 @@ export class PlayerManager extends Signals.EventEmitter {
 
     async _init() {
         this._proxy = await new Promise((resolve, reject) => {
-            // eslint-disable-next-line no-new
             new DBusProxy(Gio.DBus.session,
                 'org.freedesktop.DBus', '/org/freedesktop/DBus',
                 (proxy, error) => (error ? reject(error) : resolve(proxy)),

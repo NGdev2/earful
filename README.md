@@ -9,7 +9,7 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 
 <!-- Demo GIF goes here: docs/media/demo.gif -->
 
-![GNOME 46–48](https://img.shields.io/badge/GNOME-46%E2%80%9348-4a86cf?logo=gnome&logoColor=white)
+![GNOME 46–50](https://img.shields.io/badge/GNOME-46%E2%80%9350-4a86cf?logo=gnome&logoColor=white)
 ![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![Status: early](https://img.shields.io/badge/status-early%20preview-orange)
 
@@ -53,7 +53,7 @@ gnome-extensions enable earful@NGdev2.github.io
 
 ## How it works
 
-Earful listens to [MPRIS](https://specifications.freedesktop.org/mpris-spec/latest/), the standard way Linux media players share what they play. Anything that supports it — Spotify, browsers, VLC, Rhythmbox, Firefox, Chromium and more — shows up automatically. Nothing leaves your computer.
+Earful listens to [MPRIS](https://specifications.freedesktop.org/mpris-spec/latest/), the standard way Linux media players share what they play. Anything that supports it — Spotify, browsers, VLC, Rhythmbox, Firefox, Chromium and more — shows up automatically. Earful sends nothing anywhere and has no tracking; the only network traffic is loading cover art from the URL a player provides.
 
 ## Contributing
 

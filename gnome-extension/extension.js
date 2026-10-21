@@ -26,9 +26,13 @@ export default class EarfulExtension extends Extension {
     _toggleFocusMode() {
         const focus = !this._settings.get_boolean('focus-mode');
         this._settings.set_boolean('focus-mode', focus);
-        Main.osdWindowManager.show(-1,
-            this._indicator.earfulIcon,
-            focus ? _('Focus mode on') : _('Focus mode off'));
+        const label = focus ? _('Focus mode on') : _('Focus mode off');
+        const osd = Main.osdWindowManager;
+        // GNOME 49 replaced show(monitor, icon, label) with showAll(icon, label).
+        if (osd.showAll)
+            osd.showAll(this._indicator.earfulIcon, label);
+        else
+            osd.show(-1, this._indicator.earfulIcon, label);
     }
 
     disable() {

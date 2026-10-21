@@ -2,7 +2,7 @@
   "uuid": "earful@NGdev2.github.io",
   "name": "Earful",
   "description": "Every player, one click away. See and control everything that plays — apps and browser tabs — from one top bar button, and get a gentle \"now playing\" popup when a track changes.",
-  "shell-version": ["46", "47", "48"],
+  "shell-version": ["46", "47", "48", "49", "50"],
   "url": "https://github.com/NGdev2/earful",
   "settings-schema": "org.gnome.shell.extensions.earful",
   "gettext-domain": "earful",

@@ -17,12 +17,16 @@ const MOVE_MS = 350;
 const FADE_OUT_MS = 900;
 const HOVER_GRACE_MS = 1500;
 
+function scaleFactor() {
+    return St.ThemeContext.get_for_stage(global.stage).scale_factor;
+}
+
 const Toast = GObject.registerClass(
 class Toast extends St.Button {
     _init(player) {
         super._init({
             style_class: 'earful-toast',
-            width: WIDTH,
+            width: WIDTH * scaleFactor(),
             opacity: 0,
         });
         this.player = player;
@@ -68,10 +72,6 @@ class Toast extends St.Button {
         this._artist.visible = this._artist.text !== '';
     }
 
-    destroy() {
-        this.player.disconnectObject(this);
-        super.destroy();
-    }
 });
 
 export class ToastManager {
@@ -82,11 +82,9 @@ export class ToastManager {
             schema_id: 'org.gnome.desktop.notifications',
         });
 
+        this._manager = manager;
         manager.connectObject('player-added',
             (m, player) => this._watchPlayer(player), this);
-        for (const player of manager.allPlayers)
-            this._watchPlayer(player);
-        this._manager = manager;
 
         settings.connectObject(
             'changed::toast-position', () => this._relayout(false),
@@ -102,7 +100,12 @@ export class ToastManager {
     _watchPlayer(player) {
         player.connectObject(
             'track-changed', () => this._onTrackChanged(player),
-            'closed', () => player.disconnectObject(this),
+            'closed', () => {
+                // A popup of a closed player would relaunch the app on click.
+                player.disconnectObject(this);
+                for (const toast of this._toasts.filter(t => t.player === player))
+                    this._dismiss(toast, SLIDE_IN_MS);
+            },
             this);
     }
 
@@ -145,7 +148,8 @@ export class ToastManager {
         const existing = this._toasts.find(t => t.player === player && !t.dismissing);
         if (existing) {
             existing.showTrack();
-            this._startTimer(existing);
+            if (!existing.hover)
+                this._startTimer(existing);
             this._relayout(true);
             return;
         }
@@ -158,13 +162,17 @@ export class ToastManager {
             this._dismiss(toast, SLIDE_IN_MS);
         });
         toast.connect('notify::hover', () => {
+            if (toast.dismissing)
+                return;
             if (toast.hover)
                 this._stopTimer(toast);
             else
                 this._startTimer(toast, HOVER_GRACE_MS);
         });
 
-        Main.layoutManager.addTopChrome(toast, {affectsInputRegion: true});
+        // Like notification banners: above windows, below modal dialogs,
+        // the on-screen keyboard and the screenshot UI.
+        Main.layoutManager.addChrome(toast, {affectsInputRegion: true});
         this._toasts.push(toast);
 
         const max = this._settings.get_int('toast-max-visible');
@@ -175,7 +183,7 @@ export class ToastManager {
         this._relayout(true);
 
         const fromRight = this._settings.get_string('toast-position').endsWith('right');
-        toast.translation_x = fromRight ? 40 : -40;
+        toast.translation_x = (fromRight ? 40 : -40) * scaleFactor();
         toast.ease({
             opacity: 255,
             translation_x: 0,
@@ -230,8 +238,12 @@ export class ToastManager {
     }
 
     _dismissAll() {
-        for (const toast of [...this._toasts])
-            this._remove(toast);
+        const toasts = this._toasts;
+        this._toasts = [];
+        for (const toast of toasts) {
+            this._stopTimer(toast);
+            toast.destroy();
+        }
     }
 
     _relayout(animate) {
@@ -239,26 +251,30 @@ export class ToastManager {
             return;
 
         const workArea = Main.layoutManager.getWorkAreaForMonitor(this._monitor);
+        const scale = scaleFactor();
+        const width = WIDTH * scale;
+        const margin = MARGIN * scale;
+        const spacing = SPACING * scale;
         const [vertical, horizontal] =
             this._settings.get_string('toast-position').split('-');
 
         let x;
         if (horizontal === 'left')
-            x = workArea.x + MARGIN;
+            x = workArea.x + margin;
         else if (horizontal === 'right')
-            x = workArea.x + workArea.width - WIDTH - MARGIN;
+            x = workArea.x + workArea.width - width - margin;
         else
-            x = workArea.x + Math.round((workArea.width - WIDTH) / 2);
+            x = workArea.x + Math.round((workArea.width - width) / 2);
 
         // Oldest popup sits closest to the screen edge, newer ones line up
         // behind it, and move up when the ones before them fade out.
-        let offset = MARGIN;
+        let offset = margin;
         for (const toast of this._toasts) {
-            const [, height] = toast.get_preferred_height(WIDTH);
+            const [, height] = toast.get_preferred_height(width);
             const y = vertical === 'top'
                 ? workArea.y + offset
                 : workArea.y + workArea.height - offset - height;
-            offset += height + SPACING;
+            offset += height + spacing;
 
             if (animate && toast.placed) {
                 toast.ease({

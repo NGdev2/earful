@@ -1,4 +1,5 @@
 import Adw from 'gi://Adw';
+import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
@@ -29,27 +30,35 @@ function spinRow(settings, key, title, lower, upper) {
     return row;
 }
 
+Gio._promisify(Gio.DBusConnection.prototype, 'call');
+Gio._promisify(Gio.DBusProxy, 'new');
+
+const DBUS_TIMEOUT_MS = 2000;
+
 /** Players currently on the bus, as [appKey, display name] pairs. */
-function runningPlayers() {
+async function runningPlayers() {
     const bus = Gio.DBus.session;
+    const reply = await bus.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
+        'org.freedesktop.DBus', 'ListNames', null, null,
+        Gio.DBusCallFlags.NONE, DBUS_TIMEOUT_MS, null);
+    const [names] = reply.deepUnpack();
+
     const players = new Map();
-    try {
-        const [names] = bus.call_sync('org.freedesktop.DBus', '/org/freedesktop/DBus',
-            'org.freedesktop.DBus', 'ListNames', null, null,
-            Gio.DBusCallFlags.NONE, -1, null).deepUnpack();
-        for (const name of names) {
-            if (!name.startsWith('org.mpris.MediaPlayer2.'))
-                continue;
-            const proxy = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE,
-                null, name, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2', null);
-            const identity = proxy.get_cached_property('Identity')?.unpack() ?? '';
-            const entry = proxy.get_cached_property('DesktopEntry')?.unpack() ?? '';
-            const key = (entry || identity || name).toLowerCase();
-            players.set(key, identity || entry || name);
-        }
-    } catch (e) {
-        logError(e, 'Earful: could not list players');
-    }
+    await Promise.all(names
+        .filter(name => name.startsWith('org.mpris.MediaPlayer2.'))
+        .map(async name => {
+            try {
+                const proxy = await Gio.DBusProxy.new(bus,
+                    Gio.DBusProxyFlags.DO_NOT_CONNECT_SIGNALS, null, name,
+                    '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2', null);
+                const identity = proxy.get_cached_property('Identity')?.unpack() ?? '';
+                const entry = proxy.get_cached_property('DesktopEntry')?.unpack() ?? '';
+                players.set((entry || identity || name).toLowerCase(),
+                    identity || entry || name);
+            } catch {
+                // A player that does not answer is simply not listed.
+            }
+        }));
     return players;
 }
 
@@ -79,7 +88,8 @@ export default class EarfulPreferences extends ExtensionPreferences {
                 POSITIONS.findIndex(([id]) => id === settings.get_string('toast-position')));
         };
         syncPosition();
-        settings.connect('changed::toast-position', syncPosition);
+        const positionId = settings.connect('changed::toast-position', syncPosition);
+        window.connect('close-request', () => settings.disconnect(positionId));
         position.connect('notify::selected', () =>
             settings.set_string('toast-position', POSITIONS[position.selected][0]));
         popups.add(position);
@@ -104,14 +114,18 @@ export default class EarfulPreferences extends ExtensionPreferences {
         focus.add(switchRow(settings, 'focus-mode', _('Focus mode')));
 
         const shortcut = new Adw.EntryRow({
-            title: _('Toggle shortcut (e.g. <Super><Shift>m)'),
+            title: _('Toggle shortcut (e.g. &lt;Super&gt;&lt;Shift&gt;m)'),
             show_apply_button: true,
             text: settings.get_strv('toggle-focus-mode')[0] ?? '',
         });
         shortcut.connect('apply', () => {
             const accel = shortcut.text.trim();
-            const [ok] = Gtk.accelerator_parse(accel);
-            if (accel === '' || ok) {
+            // Require a real modifier, or a bare letter would be grabbed
+            // system-wide and stop working in every app.
+            const [ok, key, mods] = Gtk.accelerator_parse(accel);
+            const valid = ok && key !== 0 && Gtk.accelerator_valid(key, mods) &&
+                (mods & ~Gdk.ModifierType.SHIFT_MASK) !== 0;
+            if (accel === '' || valid) {
                 settings.set_strv('toggle-focus-mode', accel ? [accel] : []);
                 shortcut.remove_css_class('error');
             } else {
@@ -136,13 +150,18 @@ export default class EarfulPreferences extends ExtensionPreferences {
         });
         page.add(apps);
 
-        const known = runningPlayers();
+        this._fillPlayers(apps, settings).catch(e =>
+            logError(e, 'Earful: could not list players'));
+    }
+
+    async _fillPlayers(group, settings) {
+        const known = await runningPlayers();
         for (const key of settings.get_strv('toast-muted-apps')) {
             if (!known.has(key))
                 known.set(key, key);
         }
         if (known.size === 0) {
-            apps.add(new Adw.ActionRow({title: _('No players running right now')}));
+            group.add(new Adw.ActionRow({title: _('No players running right now')}));
         }
         for (const [key, name] of known) {
             const row = new Adw.SwitchRow({
@@ -157,7 +176,7 @@ export default class EarfulPreferences extends ExtensionPreferences {
                     muted.add(key);
                 settings.set_strv('toast-muted-apps', [...muted]);
             });
-            apps.add(row);
+            group.add(row);
         }
     }
 }

@@ -60,7 +60,10 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
         controls.add_child(this._next);
         this.add_child(controls);
 
-        player.connectObject('changed', () => this._sync(), this);
+        player.connectObject(
+            'changed', () => this._sync(),
+            'closed', () => this.destroy(),
+            this);
         this._sync();
     }
 
@@ -88,11 +91,6 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
     activate(event) {
         this.player.raise();
         super.activate(event);
-    }
-
-    destroy() {
-        this.player.disconnectObject(this);
-        super.destroy();
     }
 });
 
@@ -144,11 +142,10 @@ class EarfulIndicator extends PanelMenu.Button {
             'player-added', (m, player) => this._watchPlayer(player),
             'player-removed', () => this._queueRebuild(),
             this);
-        for (const player of manager.allPlayers)
-            this._watchPlayer(player);
-
+        // Rebuilding while open would steal key focus and make rows jump,
+        // so changes to the list wait until the menu closes.
         this.menu.connectObject('open-state-changed', (menu, open) => {
-            if (open)
+            if (open || this._dirty)
                 this._rebuild();
         }, this);
 
@@ -180,6 +177,10 @@ class EarfulIndicator extends PanelMenu.Button {
     }
 
     _queueRebuild() {
+        if (this.menu.isOpen) {
+            this._dirty = true;
+            return;
+        }
         if (this._rebuildId)
             return;
         this._rebuildId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
@@ -190,6 +191,7 @@ class EarfulIndicator extends PanelMenu.Button {
     }
 
     _rebuild() {
+        this._dirty = false;
         this._section.removeAll();
 
         const players = this._manager.players;
