@@ -4,7 +4,7 @@ import GLib from 'gi://GLib';
 
 // A player we just paused may still report Playing for a moment (e.g. two
 // players started together); within this window it can't pause the others.
-const GUARD_US = 1500 * 1000;
+const GUARD_US = 1000 * 1000;
 
 export class PauseOthers {
     constructor(settings, manager) {
@@ -29,7 +29,10 @@ export class PauseOthers {
     }
 
     _onStarted(player) {
-        if (!this._settings.get_boolean('pause-others'))
+        // A browser's own player hidden behind its bridge tabs plays along
+        // with one of them; it neither pauses others nor gets paused.
+        if (!this._settings.get_boolean('pause-others') ||
+            this._manager.isShadowed(player))
             return;
 
         const now = GLib.get_monotonic_time();
@@ -39,6 +42,7 @@ export class PauseOthers {
         const exceptions = this._settings.get_strv('pause-others-exceptions');
         for (const other of this._manager.allPlayers) {
             if (other === player || !other.isPlaying ||
+                this._manager.isShadowed(other) ||
                 exceptions.includes(other.appKey))
                 continue;
             this._pausedAt.set(other, now);

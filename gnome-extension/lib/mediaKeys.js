@@ -38,7 +38,7 @@ export class MediaKeys {
     /** The player media keys go to, or null to leave them to the system. */
     get target() {
         const mode = this._settings.get_string('media-keys-target');
-        let players = this._manager.allPlayers.filter(p => p.hasTrack);
+        let players = this._manager.players;
         if (mode === 'pinned') {
             const pinned = this._settings.get_string('media-keys-pinned');
             players = players.filter(p => p.appKey === pinned);

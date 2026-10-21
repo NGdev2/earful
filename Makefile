@@ -3,7 +3,7 @@ SRC := gnome-extension
 DIST := dist
 INSTALL_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
-.PHONY: all schemas pack install uninstall nested lint clean \
+.PHONY: all schemas pack install uninstall nested test lint clean \
 	bridge-install bridge-uninstall bridge-test bridge-test-browser
 
 all: pack
@@ -45,6 +45,10 @@ bridge-test:
 # Same, plus a throwaway headless Chromium / Chrome profile.
 bridge-test-browser:
 	python3 native-host/test-browser.py
+
+# Isolated headless GNOME Shell smoke test (never touches your session).
+test:
+	tools/test-shell.sh
 
 lint:
 	npx --yes eslint@9.13.0 $(SRC) tools native-host chromium-extension

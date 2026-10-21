@@ -16,7 +16,7 @@ const SKIPPED_APPS = ['org.gnome.VolumeControl', 'org.PulseAudio.pavucontrol'];
 // Icons Gvc falls back to when a stream names none; they say nothing
 // about which app it is.
 const GENERIC_ICONS = new Set([
-    'applications-multimedia', 'audio-x-generic', 'video-x-generic',
+    'applications-multimedia', 'audio', 'audio-x-generic', 'video-x-generic',
     'applications-games', 'dialog-information', 'phone', 'audio-card',
 ]);
 
@@ -173,8 +173,9 @@ export class AudioManager extends Signals.EventEmitter {
                 .filter(s => s.names.some(a => names.some(b => namesMatch(a, b))))
                 .map(s => s.stream);
             this._playerStreams.set(player, matched);
-            // Idle players (no track) don't hide e.g. a call in the same browser.
-            if (player.hasTrack)
+            // Only listed players claim streams: an idle browser player
+            // (no track) doesn't hide e.g. a call in the same browser.
+            if (player.hasTrack && !this._players.isShadowed(player))
                 matched.forEach(s => claimed.add(s));
         }
 

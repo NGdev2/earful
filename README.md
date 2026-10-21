@@ -25,6 +25,10 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 
 🗂️ **Every browser tab is its own player** — three YouTube tabs, three rows. Click one and Earful switches to that exact tab (Chromium, Chrome, Brave, Edge).
 
+🔊 **A mini mixer** — a volume slider on every player and every tab, plus (optional) apps that only make sound, like games and calls.
+
+⏯️ **Your rules** — pause other players when one starts (with exceptions), and send media keys to the last active or a pinned player.
+
 🤫 **Focus mode** — deep in code? One shortcut (<kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>) silences every popup. No popups over fullscreen games or while Do Not Disturb is on.
 
 🎚️ **You decide** — popup position, duration, how many at once, and which players are allowed to show them.
@@ -32,10 +36,8 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 ## Coming next
 
 - 🦊 **Firefox** support for the per-tab bridge
-- 🔊 **Volume per player**, plus apps that only play sound (games, calls) like a mini mixer
-- ⏯️ **Pause others when one starts** — optional, with exceptions
-- ⌨️ **Choose which player your media keys control** — last active or pinned
 - 🙈 **Ignore list** for autoplay noise
+- 📦 One-click install from extensions.gnome.org and the Chrome Web Store
 
 ## Install
 
@@ -69,6 +71,7 @@ Earful listens to [MPRIS](https://specifications.freedesktop.org/mpris-spec/late
 
 Ideas, bugs and pull requests are welcome — open an [issue](https://github.com/NGdev2/earful/issues).
 Test without real music using the fake player: `gjs -m tools/fake-player.js MyPlayer 5`.
+`make test` runs Earful in an invisible, isolated GNOME Shell; `make lint` and `make bridge-test` check the rest.
 
 ## License
 

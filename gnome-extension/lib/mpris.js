@@ -326,7 +326,8 @@ export class Player extends Signals.EventEmitter {
                         return;
                     // Declared writable but refused: fall back to the mixer.
                     this._volumeFailed = true;
-                    this._update();
+                    if (!this._destroyed)
+                        this._update();
                 }
             });
     }

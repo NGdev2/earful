@@ -56,12 +56,13 @@
 }
 
 .earful-pin {
-  opacity: 0.45;
+  opacity: 0.35;
 }
 
+/* Grey reads on both light and dark menus. */
 .earful-pin:checked {
   opacity: 1;
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(128, 128, 128, 0.3);
 }
 
 .earful-volume {
