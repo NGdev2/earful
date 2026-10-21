@@ -151,9 +151,10 @@ export class AudioManager extends Signals.EventEmitter {
     _streams() {
         if (this._control.get_state() !== Gvc.MixerControlState.READY)
             return [];
-        // Event streams are system and notification sounds.
+        // Event streams are system and notification sounds. (These are
+        // properties; the same-named methods are shadowed in GJS.)
         return this._control.get_sink_inputs().filter(s =>
-            !s.is_event_stream() && !s.is_virtual() &&
+            !s.is_event_stream && !s.is_virtual &&
             !SKIPPED_APPS.includes(s.get_application_id()));
     }
 
