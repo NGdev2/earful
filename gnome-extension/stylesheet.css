@@ -92,6 +92,25 @@
   opacity: 0.35;
 }
 
+.earful-dismiss {
+  padding: 4px;
+  opacity: 0.55;
+}
+
+.earful-dismiss:hover,
+.earful-dismiss:focus {
+  opacity: 1;
+}
+
+.earful-dismiss StIcon {
+  icon-size: 12px;
+}
+
+/* The player list scrolls when it is taller than the screen. */
+.earful-scroll {
+  -st-vfade-offset: 24px;
+}
+
 .earful-pin:checked {
   opacity: 1;
   background-color: rgba(128, 128, 128, 0.3);

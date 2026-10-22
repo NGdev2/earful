@@ -137,6 +137,8 @@ export class Player extends Signals.EventEmitter {
         this.startedAt = 0;
         // MPRIS volume (0..1), only when the player really lets us set it.
         this.volume = null;
+        // Hidden from the list by the user until it plays or changes track.
+        this.dismissed = false;
 
         // Whatever a player was playing when we found it stays silent;
         // every track after that is announced.
@@ -281,6 +283,9 @@ export class Player extends Signals.EventEmitter {
         const key = this.title
             ? [this.title, ...this.artists, this.album].join('\u0001')
             : null;
+        // A hidden player comes back as soon as it plays something.
+        if (this.dismissed && (this.isPlaying || key !== this.trackKey))
+            this.dismissed = false;
         if (key && key !== this.trackKey) {
             this.trackKey = key;
             this._pendingAnnounce = this._initialized || this._announce;
@@ -296,6 +301,14 @@ export class Player extends Signals.EventEmitter {
             this._pendingAnnounce = false;
             this.emit('track-changed');
         }
+    }
+
+    /** Hides a player that isn't playing, until it plays again. */
+    dismiss() {
+        if (this.isPlaying || this.dismissed)
+            return;
+        this.dismissed = true;
+        this.emit('changed');
     }
 
     playPause() {
@@ -448,7 +461,7 @@ export class PlayerManager extends Signals.EventEmitter {
     /** Players that have a track, playing first, then most recently active. */
     get players() {
         return [...this._players.values()]
-            .filter(p => p.hasTrack && !this.isShadowed(p))
+            .filter(p => p.hasTrack && !p.dismissed && !this.isShadowed(p))
             .sort((a, b) => (b.isPlaying - a.isPlaying) ||
                 (b.lastActive - a.lastActive));
     }

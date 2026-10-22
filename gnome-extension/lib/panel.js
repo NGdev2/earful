@@ -6,9 +6,11 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
+import {ensureActorVisibleInScrollView} from 'resource:///org/gnome/shell/misc/animationUtils.js';
 
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
@@ -189,6 +191,20 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
                 this._pin.checked ? player.appKey : '');
         });
 
+        // Only on players that aren't playing: hides the row until it plays.
+        this._dismiss = new St.Button({
+            style_class: 'earful-control earful-dismiss',
+            can_focus: true,
+            y_align: style === 'cards' ? Clutter.ActorAlign.START : Clutter.ActorAlign.CENTER,
+            accessible_name: _('Hide until it plays again'),
+            child: new St.Icon({icon_name: 'window-close-symbolic'}),
+        });
+        this._dismiss.connect('clicked', () => {
+            player.dismiss();
+            // The list itself is rebuilt when the menu closes.
+            this.hide();
+        });
+
         this._prev = controlButton('media-skip-backward-symbolic',
             () => player.previous());
         this._playPause = controlButton('media-playback-start-symbolic',
@@ -214,6 +230,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             top.add_child(this._art);
             top.add_child(text);
             top.add_child(this._pin);
+            top.add_child(this._dismiss);
             const bottom = new St.BoxLayout({style_class: 'earful-card-bottom'});
             bottom.add_child(this._volume);
             controls.x_expand = true;
@@ -238,6 +255,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             this.add_child(text);
             this.add_child(this._pin);
             this.add_child(controls);
+            this.add_child(this._dismiss);
         }
 
         player.connectObject(
@@ -303,6 +321,9 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
         this._playPause.child.icon_name = p.isPlaying
             ? 'media-playback-pause-symbolic'
             : 'media-playback-start-symbolic';
+        this._dismiss.visible = !p.isPlaying;
+        // Back on the list when it plays again, even while the menu is open.
+        this.visible = !p.dismissed;
         this._prev.reactive = p.canGoPrevious;
         this._next.reactive = p.canGoNext;
         this._prev.opacity = p.canGoPrevious ? 255 : 100;
@@ -405,8 +426,22 @@ class EarfulIndicator extends PanelMenu.Button {
         box.add_child(this._label);
         this.add_child(box);
 
+        // Players scroll when there are more than fit on the screen; the
+        // rest of the menu stays in place below them.
         this._section = new PopupMenu.PopupMenuSection();
         this.menu.addMenuItem(this._section);
+        this.menu.box.remove_child(this._section.actor);
+        this._scroll = new St.ScrollView({
+            style_class: 'earful-scroll',
+            hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.AUTOMATIC,
+            overlay_scrollbars: true,
+            clip_to_allocation: true,
+            child: this._section.actor,
+        });
+        // Lets the menu find the section's items (keyboard, emptiness).
+        this._scroll._delegate = this._section;
+        this.menu.box.insert_child_at_index(this._scroll, 0);
         this.menu.box.add_style_class_name('earful-menu');
 
         // Apps that play sound without being a player (games, calls).
@@ -453,6 +488,8 @@ class EarfulIndicator extends PanelMenu.Button {
             if (open || this._dirty)
                 this._rebuild();
             this._syncOthers();
+            if (open)
+                this._fitToScreen();
         }, this);
 
         this._rebuild();
@@ -464,12 +501,13 @@ class EarfulIndicator extends PanelMenu.Button {
     }
 
     _watchPlayer(player) {
-        // Rebuild when a player gains or loses a track, otherwise items
+        // Rebuild when a player joins or leaves the list, otherwise items
         // update themselves and only the panel label needs syncing.
-        let hadTrack = player.hasTrack;
+        const listed = () => player.hasTrack && !player.dismissed;
+        let wasListed = listed();
         player.connectObject('changed', () => {
-            if (player.hasTrack !== hadTrack) {
-                hadTrack = player.hasTrack;
+            if (listed() !== wasListed) {
+                wasListed = listed();
                 this._queueRebuild();
             } else {
                 this._syncPanel();
@@ -511,6 +549,8 @@ class EarfulIndicator extends PanelMenu.Button {
         for (const player of players) {
             const item = new PlayerItem(player, this._audio, this._settings, style);
             item._art.connect('palette-changed', () => this._syncBackground());
+            item.connect('key-focus-in',
+                () => ensureActorVisibleInScrollView(this._scroll, item));
             this._section.addMenuItem(item);
         }
 
@@ -523,6 +563,20 @@ class EarfulIndicator extends PanelMenu.Button {
 
         this._syncPanel();
         this._syncBackground();
+    }
+
+    /** Limits the player list to what fits under the top bar. */
+    _fitToScreen() {
+        const monitor = Main.layoutManager.findIndexForActor(this);
+        const workArea = Main.layoutManager.getWorkAreaForMonitor(monitor);
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const [, menuHeight] = this.menu.box.get_preferred_height(-1);
+        const [, listHeight] = this._scroll.get_preferred_height(-1);
+        // Room for the rest of the menu and its margins.
+        const room = workArea.height - (menuHeight - listHeight) - 40 * scale;
+        this._scroll.style = `max-height: ${Math.max(160, Math.floor(room / scale))}px;`;
+        // Each time the menu opens, start with what plays now.
+        this._scroll.vadjustment.value = 0;
     }
 
     /** Paints the menu box itself, e.g. in the current song's colors. */

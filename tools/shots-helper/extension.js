@@ -64,12 +64,54 @@ export default class ShotsHelper extends Extension {
         for (const style of STYLES.filter(s => s !== 'cards'))
             await menu(style, 'cover');
         settings.reset('menu-style');
+        await this._manyPlayers(earful);
         for (const design of ['cover', 'vinyl', 'road']) {
             settings.set_string('design', design);
             await wait(3500);
             await shot(`popups-${design}`);
         }
         settings.reset('design');
+    }
+
+    /** Lots of players: the list scrolls, paused ones can be hidden. */
+    async _manyPlayers(earful) {
+        const root = GLib.getenv('ROOT');
+        const names = ['Extra1', 'Extra2', 'Extra3', 'Extra4', 'Extra5', 'Extra6'];
+        const call = (name, method, iface = 'org.mpris.MediaPlayer2.Player') =>
+            Gio.DBus.session.call(`org.mpris.MediaPlayer2.${name}`, '/org/mpris/MediaPlayer2',
+                iface, method, null, null, Gio.DBusCallFlags.NONE, -1, null, null);
+        for (const name of names) {
+            GLib.spawn_async(null, ['gjs', '-m', `${root}/tools/fake-player.js`, name, '0'],
+                null, GLib.SpawnFlags.SEARCH_PATH, null);
+        }
+        await wait(2500);
+        names.slice(0, 3).forEach(name => call(name, 'Pause'));
+        await wait(800);
+
+        earful.menu.open(false);
+        await wait(1200);
+        await shot('many-top');
+        const adjustment = earful._scroll.vadjustment;
+        adjustment.value = adjustment.upper;
+        await wait(600);
+        await shot('many-bottom');
+        const paused = earful._section._getMenuItems().find(i => i._dismiss?.visible);
+        paused?._dismiss.emit('clicked', 1);
+        await wait(600);
+        await shot('many-dismissed');
+        earful.menu.close(false);
+        await wait(500);
+
+        // Playing again brings it back.
+        if (paused)
+            call(paused.player.identity, 'Play');
+        await wait(800);
+        earful.menu.open(false);
+        await wait(1200);
+        await shot('many-back');
+        earful.menu.close(false);
+        names.forEach(name => call(name, 'Quit', 'org.mpris.MediaPlayer2'));
+        await wait(800);
     }
 
     disable() {}
