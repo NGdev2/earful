@@ -41,18 +41,21 @@ gjs -m "$ROOT/tools/demo/covers.js" "$WORK/covers" || exit 1
 # Songs shown in the demo: [title, artist, album, cover]. Real songs, but
 # the covers are our own drawings (album art is the artists' copyright).
 C="$WORK/covers"
+# Order matters: Spotify skips once for the hero, once in the menu, then
+# once per popup design (vinyl, cassette, road, equalizer).
 cat > "$WORK/spotify.json" <<EOF
 [["HUNTING FOR YOUR DREAM", "GALNERYUS", "", "$C/neon-tides.png"],
- ["Enter One", "Sol Seppy", "", "$C/low-orbit.png"],
  ["Wonderful Life", "Black", "", "$C/golden-hour.png"],
- ["Tender Love", "Mounika.", "", "$C/velvet-static.png"]]
+ ["Tender Love", "Mounika.", "", "$C/velvet-static.png"],
+ ["Enter One", "Sol Seppy", "", "$C/low-orbit.png"],
+ ["Crab Rave", "Noisestorm", "", "$C/ocean-drive.png"]]
 EOF
 cat > "$WORK/youtube.json" <<EOF
-[["Crab Rave", "Noisestorm", "", "$C/ocean-drive.png"],
- ["death bed (coffee for your head)", "Powfu", "", "$C/night-city.png"]]
+[["Enter One", "Sol Seppy", "", "$C/low-orbit.png"],
+ ["death bed (coffee for your head)", "Powfu", "", "$C/night-signals.png"]]
 EOF
 cat > "$WORK/soundcloud.json" <<EOF
-[["Tender Love", "Mounika.", "", "$C/velvet-static.png"]]
+[["Crab Rave", "Noisestorm", "", "$C/ocean-drive.png"]]
 EOF
 
 # The shell spawns ibus-daemon when systemd is unreachable (as on our
