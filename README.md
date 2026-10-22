@@ -96,7 +96,7 @@ Earful listens to [MPRIS](https://specifications.freedesktop.org/mpris-spec/late
 Ideas, bugs and pull requests are welcome — open an [issue](https://github.com/NGdev2/earful/issues).
 Test without real music using the fake player: `gjs -m tools/fake-player.js MyPlayer 5`.
 `make test` runs Earful in an invisible, isolated GNOME Shell; `make lint` and `make bridge-test` check the rest.
-`make demo` records the pictures above the same way, with made-up songs and covers.
+`make demo` records the pictures above the same way, with fake players and drawn covers.
 
 ## License
 

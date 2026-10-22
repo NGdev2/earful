@@ -3,7 +3,7 @@
 # every design, plus stills of menu styles, popups and settings.
 #
 # Everything happens in an invisible, isolated GNOME Shell (like
-# tools/test-shell.sh) with fictional players and covers, and its own empty
+# tools/test-shell.sh) with fake players and drawn covers, and its own empty
 # home folder, so nothing from your desktop can end up in the pictures.
 #
 # Needs: gnome-shell, gjs, ffmpeg.   Usage: tools/record-demo.sh [out-dir]
@@ -38,21 +38,21 @@ mkdir -p "$EXTS/earful-demo@test"
 cp "$ROOT/tools/demo/extension.js" "$ROOT/tools/demo/metadata.json" "$EXTS/earful-demo@test/"
 gjs -m "$ROOT/tools/demo/covers.js" "$WORK/covers" || exit 1
 
-# Fictional songs: [title, artist, album, cover].
+# Songs shown in the demo: [title, artist, album, cover]. Real songs, but
+# the covers are our own drawings (album art is the artists' copyright).
 C="$WORK/covers"
 cat > "$WORK/spotify.json" <<EOF
-[["Neon Tides", "Lumen Bay", "Afterglow", "$C/neon-tides.png"],
- ["Golden Hour", "Mira Sol", "Long Light", "$C/golden-hour.png"],
- ["Velvet Static", "Kiko & The Moths", "Soft Noise", "$C/velvet-static.png"],
- ["Low Orbit", "Ada North", "Satellites", "$C/low-orbit.png"],
- ["Ocean Drive", "Coastline", "Summer Roads", "$C/ocean-drive.png"]]
+[["HUNTING FOR YOUR DREAM", "GALNERYUS", "", "$C/neon-tides.png"],
+ ["Enter One", "Sol Seppy", "", "$C/low-orbit.png"],
+ ["Wonderful Life", "Black", "", "$C/golden-hour.png"],
+ ["Tender Love", "Mounika.", "", "$C/velvet-static.png"]]
 EOF
 cat > "$WORK/youtube.json" <<EOF
-[["lofi beats to code to", "Midnight Study Radio", "", "$C/night-city.png"],
- ["Night Signals", "Static Bloom", "", "$C/night-signals.png"]]
+[["Crab Rave", "Noisestorm", "", "$C/ocean-drive.png"],
+ ["death bed (coffee for your head)", "Powfu", "", "$C/night-city.png"]]
 EOF
 cat > "$WORK/soundcloud.json" <<EOF
-[["Paper Planes", "The Origami Club", "", "$C/paper-planes.png"]]
+[["Tender Love", "Mounika.", "", "$C/velvet-static.png"]]
 EOF
 
 # The shell spawns ibus-daemon when systemd is unreachable (as on our
