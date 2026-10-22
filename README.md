@@ -31,7 +31,7 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 
 🤫 **Focus mode** — deep in code? One shortcut (<kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>) silences every popup. No popups over fullscreen games or while Do Not Disturb is on.
 
-🎚️ **You decide** — popup position, duration, how many at once, and which players are allowed to show them.
+🎚️ **You decide** — cards, list or compact menu; popup position, duration, how many at once, and which players are allowed to show them.
 
 ## Coming next
 
@@ -65,7 +65,7 @@ Details: [chromium-extension](chromium-extension/README.md) · [native-host](nat
 
 ## How it works
 
-Earful listens to [MPRIS](https://specifications.freedesktop.org/mpris-spec/latest/), the standard way Linux media players share what they play. Anything that supports it — Spotify, browsers, VLC, Rhythmbox, Firefox, Chromium and more — shows up automatically. Earful sends nothing anywhere and has no tracking; the only network traffic is loading cover art from the URL a player provides.
+Earful listens to [MPRIS](https://specifications.freedesktop.org/mpris-spec/latest/), the standard way Linux media players share what they play. Anything that supports it — Spotify, browsers, VLC, Rhythmbox, Firefox, Chromium and more — shows up automatically. For mpv, install the `mpv-mpris` plugin (`sudo apt install mpv-mpris`); without it, mpv still shows under *Other audio* with the file it plays. Earful sends nothing anywhere and has no tracking; the only network traffic is loading cover art from the URL a player provides.
 
 ## Contributing
 

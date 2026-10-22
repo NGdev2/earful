@@ -10,6 +10,8 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 
+import {CoverArt} from './art.js';
+
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 function controlButton(iconName, onClick) {
@@ -130,19 +132,40 @@ class VolumeSlider extends St.BoxLayout {
     }
 });
 
+/** Small app icon plus a name, e.g. the browser's icon and "Twitch · Chrome". */
+const SourceLine = GObject.registerClass(
+class SourceLine extends St.BoxLayout {
+    _init() {
+        super._init({style_class: 'earful-source'});
+        this._icon = new St.Icon({
+            style_class: 'earful-source-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._label = new St.Label({y_align: Clutter.ActorAlign.CENTER});
+        this.add_child(this._icon);
+        this.add_child(this._label);
+    }
+
+    setPlayer(player) {
+        this._icon.gicon = player.appIcon;
+        this._label.text = player.sourceName;
+        this.visible = this._label.text !== '';
+    }
+});
+
+// Cover size per menu style, in logical pixels.
+const COVER_SIZES = {cards: 64, list: 48, compact: 32};
+
 const PlayerItem = GObject.registerClass(
 class PlayerItem extends PopupMenu.PopupBaseMenuItem {
-    _init(player, audio, settings) {
-        super._init({style_class: 'earful-player'});
+    _init(player, audio, settings, style) {
+        super._init({style_class: `earful-player earful-${style}`});
         this.player = player;
         this._audio = audio;
         this._settings = settings;
+        this._style = style;
 
-        this._art = new St.Icon({
-            style_class: 'earful-art',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        this.add_child(this._art);
+        this._art = new CoverArt(COVER_SIZES[style], 'earful-art');
 
         const text = new St.BoxLayout({
             vertical: true,
@@ -150,17 +173,14 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-text',
         });
-        this._source = new St.Label({style_class: 'earful-source'});
+        this._source = new SourceLine();
         this._title = new St.Label({style_class: 'earful-title'});
         this._artist = new St.Label({style_class: 'earful-artist'});
-        text.add_child(this._source);
+        if (style !== 'compact')
+            text.add_child(this._source);
         text.add_child(this._title);
         text.add_child(this._artist);
-        this._volume = new VolumeSlider(audio);
-        text.add_child(this._volume);
-        this.add_child(text);
 
-        const controls = new St.BoxLayout({style_class: 'earful-controls'});
         // Shown only when media keys go to a pinned player.
         this._pin = new St.Button({
             style_class: 'earful-control earful-pin',
@@ -174,23 +194,55 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             settings.set_string('media-keys-pinned',
                 this._pin.checked ? player.appKey : '');
         });
-        controls.add_child(this._pin);
+
         this._prev = controlButton('media-skip-backward-symbolic',
             () => player.previous());
         this._playPause = controlButton('media-playback-start-symbolic',
             () => player.playPause());
+        this._playPause.add_style_class_name('earful-play');
         this._next = controlButton('media-skip-forward-symbolic',
             () => player.next());
-        controls.add_child(this._prev);
+        const controls = new St.BoxLayout({
+            style_class: 'earful-controls',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        if (style !== 'compact')
+            controls.add_child(this._prev);
         controls.add_child(this._playPause);
         controls.add_child(this._next);
-        this.add_child(controls);
+
+        this._volume = style === 'compact' ? null : new VolumeSlider(audio);
+
+        if (style === 'cards') {
+            // Cover and text on top; volume and controls share the row below.
+            const column = new St.BoxLayout({vertical: true, x_expand: true});
+            const top = new St.BoxLayout({style_class: 'earful-card-top'});
+            top.add_child(this._art);
+            top.add_child(text);
+            top.add_child(this._pin);
+            const bottom = new St.BoxLayout({style_class: 'earful-card-bottom'});
+            bottom.add_child(this._volume);
+            controls.x_expand = true;
+            controls.x_align = Clutter.ActorAlign.END;
+            bottom.add_child(controls);
+            column.add_child(top);
+            column.add_child(bottom);
+            this.add_child(column);
+        } else {
+            if (this._volume)
+                text.add_child(this._volume);
+            this.add_child(this._art);
+            this.add_child(text);
+            this.add_child(this._pin);
+            this.add_child(controls);
+        }
 
         player.connectObject(
             'changed', () => this._sync(),
             'closed', () => this.destroy(),
             this);
-        audio.connectObject('changed', () => this._syncVolume(), this);
+        if (this._volume)
+            audio.connectObject('changed', () => this._syncVolume(), this);
         settings.connectObject(
             'changed::media-keys-target', () => this._syncPin(),
             'changed::media-keys-pinned', () => this._syncPin(),
@@ -200,6 +252,8 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
     }
 
     _syncVolume() {
+        if (!this._volume)
+            return;
         // The player's own volume if it has one, else its mixer streams.
         if (this.player.volume !== null)
             this._volume.bindPlayer(this.player);
@@ -216,8 +270,8 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
 
     _sync() {
         const p = this.player;
-        this._art.gicon = p.artIcon;
-        this._source.text = p.sourceName;
+        this._art.setPlayer(p);
+        this._source.setPlayer(p);
         this._title.text = p.title;
         this._artist.text = p.artistText;
         this._artist.visible = this._artist.text !== '';
@@ -266,8 +320,11 @@ class AudioAppItem extends PopupMenu.PopupBaseMenuItem {
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-text',
         });
+        // "mpv" above "My Trip" when the app says what it plays.
+        this._source = new St.Label({style_class: 'earful-source'});
         this._name = new St.Label({style_class: 'earful-title'});
         this._volume = new VolumeSlider(audio);
+        text.add_child(this._source);
         text.add_child(this._name);
         text.add_child(this._volume);
         this.add_child(text);
@@ -282,7 +339,9 @@ class AudioAppItem extends PopupMenu.PopupBaseMenuItem {
     update(entry) {
         this._entry = entry;
         this._icon.gicon = entry.gicon;
-        this._name.text = entry.name;
+        this._source.text = entry.detail ? entry.name : '';
+        this._source.visible = entry.detail !== '';
+        this._name.text = entry.detail || entry.name;
         this._volume.bindStreams(entry.streams);
     }
 
@@ -345,6 +404,7 @@ class EarfulIndicator extends PanelMenu.Button {
             'changed::panel-label-max-chars', () => this._syncPanel(),
             'changed::hide-when-idle', () => this._syncPanel(),
             'changed::show-audio-only-apps', () => this._syncOthers(),
+            'changed::menu-style', () => this._queueRebuild(),
             this);
         audio.connectObject('changed', () => this._syncOthers(), this);
 
@@ -408,8 +468,12 @@ class EarfulIndicator extends PanelMenu.Button {
         this._section.removeAll();
 
         const players = this._manager.players;
+        const style = this._settings.get_string('menu-style');
+        for (const name of ['cards', 'list', 'compact'])
+            this.menu.box.remove_style_class_name(`earful-menu-${name}`);
+        this.menu.box.add_style_class_name(`earful-menu-${style}`);
         for (const player of players)
-            this._section.addMenuItem(new PlayerItem(player, this._audio, this._settings));
+            this._section.addMenuItem(new PlayerItem(player, this._audio, this._settings, style));
 
         if (players.length === 0) {
             const empty = new PopupMenu.PopupMenuItem(_('Nothing is playing'),

@@ -1,7 +1,28 @@
+/* Grey tints read well on both light and dark menus. */
+
+/* Cover art: a rounded tile with the app icon until the cover loads. */
+
+.earful-cover {
+  border-radius: 10px;
+  background-color: rgba(128, 128, 128, 0.18);
+}
+
+.earful-cover:cover {
+  background-color: transparent;
+}
+
 /* Top bar menu */
 
 .earful-menu {
-  min-width: 360px;
+  min-width: 340px;
+}
+
+.earful-menu-cards {
+  min-width: 380px;
+}
+
+.earful-menu-compact {
+  min-width: 300px;
 }
 
 .earful-player {
@@ -14,32 +35,35 @@
   font-weight: bold;
 }
 
-.earful-art {
-  icon-size: 48px;
-  border-radius: 8px;
-}
-
 .earful-text {
   spacing: 1px;
 }
 
 .earful-source {
+  spacing: 5px;
   font-size: 0.8em;
-  opacity: 0.65;
+}
+
+.earful-source StLabel {
+  opacity: 0.7;
+}
+
+.earful-source-icon {
+  icon-size: 14px;
 }
 
 .earful-title {
-  max-width: 200px;
+  max-width: 220px;
 }
 
 .earful-artist {
   font-size: 0.9em;
-  opacity: 0.8;
-  max-width: 200px;
+  opacity: 0.75;
+  max-width: 220px;
 }
 
 .earful-controls {
-  spacing: 2px;
+  spacing: 4px;
 }
 
 .earful-control {
@@ -48,38 +72,110 @@
 }
 
 .earful-control:hover {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(128, 128, 128, 0.2);
 }
 
 .earful-control StIcon {
   icon-size: 16px;
 }
 
+.earful-play {
+  padding: 9px;
+  background-color: rgba(128, 128, 128, 0.18);
+}
+
+.earful-play:hover {
+  background-color: rgba(128, 128, 128, 0.32);
+}
+
 .earful-pin {
   opacity: 0.35;
 }
 
-/* Grey reads on both light and dark menus. */
 .earful-pin:checked {
   opacity: 1;
   background-color: rgba(128, 128, 128, 0.3);
 }
 
 .earful-volume {
-  spacing: 6px;
+  spacing: 8px;
   padding-top: 4px;
 }
 
 .earful-volume-icon {
-  icon-size: 12px;
+  icon-size: 14px;
   opacity: 0.7;
 }
 
 .earful-volume .slider {
-  height: 14px;
-  -barlevel-height: 3px;
-  -slider-handle-radius: 6px;
+  height: 16px;
+  -barlevel-height: 4px;
+  -slider-handle-radius: 7px;
 }
+
+/* Cards: each player on its own tile, controls under the cover. */
+
+.earful-cards {
+  margin: 3px 6px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: rgba(128, 128, 128, 0.08);
+}
+
+.earful-cards:playing {
+  background-color: rgba(128, 128, 128, 0.15);
+}
+
+.earful-cards .earful-cover {
+  border-radius: 12px;
+}
+
+.earful-cards .earful-title {
+  font-size: 1.05em;
+  max-width: 250px;
+}
+
+.earful-cards .earful-artist {
+  max-width: 250px;
+}
+
+.earful-card-top {
+  spacing: 14px;
+}
+
+.earful-card-bottom {
+  spacing: 12px;
+  padding-top: 8px;
+}
+
+.earful-cards .earful-volume {
+  padding-top: 0;
+}
+
+.earful-cards .earful-play StIcon {
+  icon-size: 18px;
+}
+
+/* Compact: one slim line per player. */
+
+.earful-compact {
+  spacing: 10px;
+  padding: 5px 12px;
+}
+
+.earful-compact .earful-cover {
+  border-radius: 7px;
+}
+
+.earful-compact .earful-artist {
+  font-size: 0.85em;
+}
+
+.earful-compact .earful-play {
+  padding: 6px;
+}
+
+/* Other audio */
 
 .earful-section-title {
   font-size: 0.8em;
@@ -110,37 +206,54 @@
 /* Now playing popups */
 
 .earful-toast {
-  background-color: rgba(30, 30, 34, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  background-color: rgba(28, 28, 32, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   color: #f2f2f2;
 }
 
 .earful-toast:hover {
-  background-color: rgba(42, 42, 48, 0.95);
+  background-color: rgba(40, 40, 46, 0.96);
 }
 
 .earful-toast-box {
-  spacing: 12px;
+  spacing: 14px;
 }
 
-.earful-toast-art {
-  icon-size: 56px;
-  border-radius: 10px;
+.earful-toast .earful-cover {
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.earful-toast .earful-cover:cover {
+  background-color: transparent;
+}
+
+.earful-toast-text {
+  spacing: 2px;
 }
 
 .earful-toast-source {
+  spacing: 6px;
   font-size: 0.8em;
-  opacity: 0.6;
+  padding-bottom: 2px;
+}
+
+.earful-toast-source StLabel {
+  opacity: 0.65;
+}
+
+.earful-toast-source-icon {
+  icon-size: 14px;
 }
 
 .earful-toast-title {
   font-weight: bold;
+  font-size: 1.1em;
 }
 
 .earful-toast-artist {
-  font-size: 0.9em;
-  opacity: 0.85;
+  opacity: 0.8;
 }

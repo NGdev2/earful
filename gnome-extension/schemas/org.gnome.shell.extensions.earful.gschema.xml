@@ -57,6 +57,15 @@
     </key>
 
     <!-- Top bar -->
+    <key name="menu-style" type="s">
+      <choices>
+        <choice value="cards"/>
+        <choice value="list"/>
+        <choice value="compact"/>
+      </choices>
+      <default>'cards'</default>
+      <summary>How players look in the top bar menu</summary>
+    </key>
     <key name="show-panel-label" type="b">
       <default>false</default>
       <summary>Show the current track next to the icon</summary>

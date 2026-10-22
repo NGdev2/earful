@@ -4,6 +4,7 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {clearCache as clearArtCache} from './lib/art.js';
 import {AudioManager} from './lib/audio.js';
 import {MediaKeys} from './lib/mediaKeys.js';
 import {PlayerManager} from './lib/mpris.js';
@@ -57,5 +58,6 @@ export default class EarfulExtension extends Extension {
         this._manager.destroy();
         this._manager = null;
         this._settings = null;
+        clearArtCache();
     }
 }

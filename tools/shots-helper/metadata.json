@@ -1,0 +1,6 @@
+{
+  "uuid": "earful-shots@test",
+  "name": "Earful screenshot helper (tests only)",
+  "description": "Used by tools/test-shell.sh inside a throwaway shell.",
+  "shell-version": ["46", "47", "48", "49", "50"]
+}

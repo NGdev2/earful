@@ -27,6 +27,31 @@ const GENERIC_WORDS = new Set([
     'pulseaudio', 'pipewire', 'webrtc', 'output', 'the', 'org', 'com',
 ]);
 
+// Stream names that say nothing about what is playing.
+const GENERIC_MEDIA_NAMES = new Set([
+    'playback', 'audio stream', 'audiostream', 'playback stream', 'output',
+    'audio', 'sound', 'simple directmedia layer', 'alsa playback', 'stream',
+    'webrtc voiceengine', 'record', 'media',
+]);
+
+/**
+ * What a stream says it plays, e.g. mpv's "My Trip.mkv - mpv" -> "My Trip",
+ * or '' when it only repeats the app name or a generic word.
+ */
+function mediaTitle(stream, appName) {
+    const names = [appName, stream.get_description(), stream.get_application_id()]
+        .filter(Boolean).map(n => n.toLowerCase());
+    let title = (stream.get_name() ?? '').trim();
+    const dash = title.match(/^(.*\S)\s+[-–—]\s+([^-–—]+)$/);
+    if (dash && names.includes(dash[2].toLowerCase()))
+        title = dash[1];
+    title = title.replace(/\.[a-z0-9]{2,4}$/i, '');
+    const lower = title.toLowerCase();
+    if (GENERIC_MEDIA_NAMES.has(lower) || names.includes(lower))
+        return '';
+    return title;
+}
+
 function words(name) {
     return name.toLowerCase().replace(/\.desktop$/, '')
         .split(/[^a-z0-9]+/).filter(Boolean);
@@ -188,20 +213,23 @@ export class AudioManager extends Signals.EventEmitter {
                 const app = lookupApp(stream);
                 groups.set(key, {
                     key,
-                    name: app?.get_name() || stream.get_name() ||
-                        stream.get_description() || key,
+                    name: app?.get_name() || stream.get_description() ||
+                        stream.get_name() || key,
+                    detail: '',
                     gicon: app?.get_icon() ?? stream.get_gicon(),
                     app,
                     streams: [],
                 });
             }
-            groups.get(key).streams.push(stream);
+            const group = groups.get(key);
+            group.streams.push(stream);
+            group.detail ||= mediaTitle(stream, group.name);
         }
         this._others = [...groups.values()];
 
         const signature = JSON.stringify([
             [...this._playerStreams].map(([p, s]) => [p.busName, s.map(x => x.id)]),
-            this._others.map(o => [o.key, o.name, o.streams.map(x => x.id)]),
+            this._others.map(o => [o.key, o.name, o.detail, o.streams.map(x => x.id)]),
         ]);
         if (signature !== this._signature) {
             this._signature = signature;
@@ -214,7 +242,7 @@ export class AudioManager extends Signals.EventEmitter {
         return this._playerStreams.get(player) ?? [];
     }
 
-    /** Apps playing sound that are not players: {key, name, gicon, app, streams}. */
+    /** Apps playing sound that are not players: {key, name, detail, gicon, app, streams}. */
     get otherApps() {
         return this._others;
     }

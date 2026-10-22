@@ -70,9 +70,6 @@ const BRIDGE_TAB = /^org\.mpris\.MediaPlayer2\.earful_tab_\d+\.instance(\d+)$/;
 // A browser's own single player, e.g. org.mpris.MediaPlayer2.chromium.instance1234.
 const BROWSER_INSTANCE = /^org\.mpris\.MediaPlayer2\.[^.]+\.instance(\d+)$/;
 
-// Cover art is loaded by the shell itself, so only allow local files and web URLs.
-const ART_URL = /^(file|https?):\/\//;
-
 /** Promise wrapper for an async D-Bus method call. */
 function dbusCall(name, path, iface, method, params, replyType, cancellable) {
     return new Promise((resolve, reject) => {
@@ -90,6 +87,16 @@ function dbusCall(name, path, iface, method, params, replyType, cancellable) {
 
 function asString(value) {
     return typeof value === 'string' ? value : '';
+}
+
+/** "file:///videos/My%20Trip.mkv" -> "My Trip", for players that send no title. */
+function titleFromUrl(url) {
+    const path = url.split(/[?#]/)[0];
+    let name = path.slice(path.lastIndexOf('/') + 1);
+    try {
+        name = decodeURIComponent(name);
+    } catch {}
+    return name.replace(/\.[a-z0-9]{1,5}$/i, '');
 }
 
 function asStringList(value) {
@@ -214,18 +221,15 @@ export class Player extends Signals.EventEmitter {
         return this.busName.startsWith(BRIDGE_PREFIX);
     }
 
-    /** Human readable source, e.g. "Spotify" or "Chromium". */
+    /** Human readable source, e.g. "Spotify" or "Twitch · Google Chrome". */
     get sourceName() {
-        return this.app?.get_name() ?? this.identity ?? '';
+        // Bridge tabs name their site and browser.
+        if (this.isBridge && this.identity)
+            return this.identity.replace(' — ', ' · ');
+        return this.app?.get_name() || this.identity;
     }
 
-    /** Cover art if the player provides it, otherwise the app icon. */
-    get artIcon() {
-        if (ART_URL.test(this.artUrl)) {
-            try {
-                return new Gio.FileIcon({file: Gio.File.new_for_uri(this.artUrl)});
-            } catch {}
-        }
+    get appIcon() {
         return this.app?.get_icon() ??
             new Gio.ThemedIcon({name: 'audio-x-generic-symbolic'});
     }
@@ -251,7 +255,9 @@ export class Player extends Signals.EventEmitter {
 
         const wasPlaying = this.isPlaying;
         this.status = proxy.PlaybackStatus ?? 'Stopped';
-        this.title = asString(metadata['xesam:title']);
+        // VLC sends only the file's URL for files without tags.
+        this.title = asString(metadata['xesam:title']) ||
+            titleFromUrl(asString(metadata['xesam:url']));
         this.artists = asStringList(metadata['xesam:artist']);
         this.album = asString(metadata['xesam:album']);
         this.artUrl = asString(metadata['mpris:artUrl']);

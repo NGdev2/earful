@@ -9,7 +9,10 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-const WIDTH = 340;
+import {CoverArt} from './art.js';
+
+const WIDTH = 380;
+const COVER_SIZE = 72;
 const MARGIN = 16;
 const SPACING = 10;
 const SLIDE_IN_MS = 250;
@@ -31,22 +34,32 @@ class Toast extends St.Button {
         });
         this.player = player;
 
-        const box = new St.BoxLayout({style_class: 'earful-toast-box'});
-        this._art = new St.Icon({
-            style_class: 'earful-toast-art',
-            y_align: Clutter.ActorAlign.CENTER,
+        // A button centers its child; the card's content starts at the left.
+        const box = new St.BoxLayout({
+            style_class: 'earful-toast-box',
+            x_expand: true,
+            x_align: Clutter.ActorAlign.FILL,
         });
+        this._art = new CoverArt(COVER_SIZE, 'earful-toast-art');
         box.add_child(this._art);
 
         const text = new St.BoxLayout({
             vertical: true,
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
+            style_class: 'earful-toast-text',
         });
-        this._source = new St.Label({style_class: 'earful-toast-source'});
+        const source = new St.BoxLayout({style_class: 'earful-toast-source'});
+        this._sourceIcon = new St.Icon({
+            style_class: 'earful-toast-source-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._source = new St.Label({y_align: Clutter.ActorAlign.CENTER});
+        source.add_child(this._sourceIcon);
+        source.add_child(this._source);
         this._title = new St.Label({style_class: 'earful-toast-title'});
         this._artist = new St.Label({style_class: 'earful-toast-artist'});
-        text.add_child(this._source);
+        text.add_child(source);
         text.add_child(this._title);
         text.add_child(this._artist);
         box.add_child(text);
@@ -56,7 +69,7 @@ class Toast extends St.Button {
         // as long as the same track is shown.
         player.connectObject('changed', () => {
             if (player.trackKey === this._trackKey)
-                this._art.gicon = player.artIcon;
+                this._art.setPlayer(player);
         }, this);
 
         this.showTrack();
@@ -65,8 +78,10 @@ class Toast extends St.Button {
     showTrack() {
         const p = this.player;
         this._trackKey = p.trackKey;
-        this._art.gicon = p.artIcon;
+        this._art.setPlayer(p);
+        this._sourceIcon.gicon = p.appIcon;
         this._source.text = p.sourceName;
+        this._source.get_parent().visible = this._source.text !== '';
         this._title.text = p.title;
         this._artist.text = p.artistText;
         this._artist.visible = this._artist.text !== '';

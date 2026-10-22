@@ -68,6 +68,13 @@ const PLAYER_IFACE = `
   </interface>
 </node>`;
 
+// Parsed once and kept for the whole run: GJS caches lookups per interface
+// description and never drops the cache, so descriptions freed with a
+// closed tab could leave a later tab's root interface answering
+// "No such property" for everything.
+const ROOT_INFO = Gio.DBusInterfaceInfo.new_for_xml(ROOT_IFACE);
+const PLAYER_INFO = Gio.DBusInterfaceInfo.new_for_xml(PLAYER_IFACE);
+
 // Properties whose changes are announced with PropertiesChanged.
 // Position is deliberately missing: the spec uses the Seeked signal for it.
 const ROOT_PROPERTIES = {Identity: 's', DesktopEntry: 's'};
@@ -129,8 +136,8 @@ export class TabPlayer {
         this._trackNumber = 0;
         this._artUri = '';
 
-        this._root = Gio.DBusExportedObject.wrapJSObject(ROOT_IFACE, this);
-        this._player = Gio.DBusExportedObject.wrapJSObject(PLAYER_IFACE, this);
+        this._root = Gio.DBusExportedObject.wrapJSObject(ROOT_INFO, this);
+        this._player = Gio.DBusExportedObject.wrapJSObject(PLAYER_INFO, this);
         this._published = this._snapshot();
 
         const address = Gio.dbus_address_get_for_bus_sync(Gio.BusType.SESSION, null);

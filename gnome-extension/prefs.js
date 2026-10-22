@@ -15,6 +15,12 @@ const POSITIONS = [
     ['bottom-right', () => _('Bottom right')],
 ];
 
+const MENU_STYLES = [
+    ['cards', () => _('Cards')],
+    ['list', () => _('List')],
+    ['compact', () => _('Compact (no sliders)')],
+];
+
 const MEDIA_KEY_TARGETS = [
     ['default', () => _('Let the system choose')],
     ['last-active', () => _('Last active player')],
@@ -178,6 +184,7 @@ export default class EarfulPreferences extends ExtensionPreferences {
         // Top bar
         const panel = new Adw.PreferencesGroup({title: _('Top bar')});
         page.add(panel);
+        panel.add(choiceRow(window, settings, 'menu-style', _('Menu style'), MENU_STYLES));
         panel.add(switchRow(settings, 'show-panel-label',
             _('Show the playing track next to the icon')));
         panel.add(spinRow(settings, 'panel-label-max-chars', _('Label length'), 10, 80));
