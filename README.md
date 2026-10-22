@@ -31,6 +31,8 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 
 🤫 **Focus mode** — deep in code? One shortcut (<kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>) silences every popup. No popups over fullscreen games or while Do Not Disturb is on.
 
+🎨 **Your look** — cards that take their colors from each album cover, dark glass, or your system theme; little bars that dance while music plays.
+
 🎚️ **You decide** — cards, list or compact menu; popup position, duration, how many at once, and which players are allowed to show them.
 
 ## Coming next

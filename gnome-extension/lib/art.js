@@ -45,6 +45,96 @@ function decode(bytes) {
     });
 }
 
+function rgbToHsl([r, g, b]) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    if (max === min)
+        return [0, 0, l];
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    let h;
+    if (max === r)
+        h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g)
+        h = (b - r) / d + 2;
+    else
+        h = (r - g) / d + 4;
+    return [h / 6, s, l];
+}
+
+function hslToRgb([h, s, l]) {
+    const hue = t => {
+        t = (t + 1) % 1;
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        if (t < 1 / 6)
+            return p + (q - p) * 6 * t;
+        if (t < 1 / 2)
+            return q;
+        if (t < 2 / 3)
+            return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+    };
+    return [hue(h + 1 / 3), hue(h), hue(h - 1 / 3)].map(v => Math.round(v * 255));
+}
+
+const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+/**
+ * The cover's main colors, toned for a card under white text:
+ * {start, end} for the background gradient, {accent} for sliders.
+ */
+function makePalette(pixbuf) {
+    const tiny = pixbuf.scale_simple(12, 12, GdkPixbuf.InterpType.BILINEAR);
+    const pixels = tiny.get_pixels();
+    const {rowstride, n_channels: channels} = tiny;
+
+    // Weigh colors by how vivid they are, grouped by hue.
+    const groups = new Map();
+    for (let y = 0; y < 12; y++) {
+        for (let x = 0; x < 12; x++) {
+            const i = y * rowstride + x * channels;
+            const [h, s, l] = rgbToHsl([pixels[i], pixels[i + 1], pixels[i + 2]]);
+            const key = s < 0.15 || l < 0.08 || l > 0.94 ? 'grey' : Math.floor(h * 12);
+            const weight = key === 'grey' ? 0.3 : 0.3 + s * (1 - Math.abs(l - 0.5));
+            const group = groups.get(key) ?? {key, weight: 0, h: [0, 0], s: 0, l: 0};
+            group.weight += weight;
+            group.h[0] += Math.cos(h * 2 * Math.PI) * weight;
+            group.h[1] += Math.sin(h * 2 * Math.PI) * weight;
+            group.s += s * weight;
+            group.l += l * weight;
+            groups.set(key, group);
+        }
+    }
+    // White, black and grey only count when the cover has little color.
+    const total = [...groups.values()].reduce((sum, g) => sum + g.weight, 0);
+    const grey = groups.get('grey');
+    if (grey && grey.weight < total * 0.85)
+        groups.delete('grey');
+    const ranked = [...groups.values()].sort((a, b) => b.weight - a.weight)
+        .map(g => [
+            (Math.atan2(g.h[1], g.h[0]) / (2 * Math.PI) + 1) % 1,
+            g.key === 'grey' ? 0.12 : g.s / g.weight,
+            g.l / g.weight,
+        ]);
+    const [first] = ranked;
+    // A second color with a clearly different hue makes a livelier gradient.
+    const second = ranked.find(c =>
+        Math.min(Math.abs(c[0] - first[0]), 1 - Math.abs(c[0] - first[0])) > 0.08 &&
+        c[1] > 0.15) ?? first;
+
+    const tone = ([h, s], l) => hslToRgb([h, clamp(s, 0, 0.75), l]);
+    return {
+        start: tone(first, 0.36),
+        end: tone(second, 0.2),
+        accent: hslToRgb([first[0], clamp(first[1], first[1] > 0.15 ? 0.55 : 0, 0.85), 0.66]),
+    };
+}
+
 /** Crops the middle square (video thumbnails are wide) and shrinks it. */
 async function makeCover(url) {
     const bytes = await loadBytes(Gio.File.new_for_uri(url));
@@ -58,11 +148,14 @@ async function makeCover(url) {
     const pixels = Math.min(side, COVER_PIXELS);
     const small = square.scale_simple(pixels, pixels, GdkPixbuf.InterpType.BILINEAR);
     const [, png] = small.save_to_bufferv('png', [], []);
-    // A bytes icon is not kept in the shell's texture cache forever.
-    return Gio.BytesIcon.new(new GLib.Bytes(png));
+    return {
+        // A bytes icon is not kept in the shell's texture cache forever.
+        icon: Gio.BytesIcon.new(new GLib.Bytes(png)),
+        palette: makePalette(small),
+    };
 }
 
-/** Resolves to a square cover icon, or null if there is none. */
+/** Resolves to {icon, palette} of a square cover, or null if there is none. */
 function loadCover(url, trackKey) {
     if (!ART_URL.test(url ?? ''))
         return Promise.resolve(null);
@@ -125,8 +218,9 @@ function scaleFactor() {
  * A player's cover, or its app icon on a tinted tile while there is none
  * (or while the cover loads).
  */
-export const CoverArt = GObject.registerClass(
-class CoverArt extends St.Bin {
+export const CoverArt = GObject.registerClass({
+    Signals: {'palette-changed': {}},
+}, class CoverArt extends St.Bin {
     /**
      * @param {number} size side in logical pixels
      * @param {string} styleClass extra style class for the tile
@@ -145,6 +239,8 @@ class CoverArt extends St.Bin {
         this.set_child(this._icon);
         this._corners = new RoundedCorners(Math.round(size / 5));
         this._request = null;
+        /** Colors of the shown cover, or null while there is none. */
+        this.palette = null;
         this.connect('destroy', () => (this._icon = null));
     }
 
@@ -155,12 +251,28 @@ class CoverArt extends St.Bin {
             return;
         this._request = request;
 
-        this._showIcon(player.appIcon);
+        // The previous cover stays until the next one is ready, so
+        // skipping tracks doesn't flash the app icon and plain colors.
+        const appIcon = player.appIcon;
+        if (!this.palette)
+            this._showIcon(appIcon);
         loadCover(player.artUrl, player.trackKey).then(cover => {
             // Still the same track, and not destroyed meanwhile.
-            if (cover && this._request === request && this._icon)
-                this._showCover(cover);
+            if (this._request !== request || !this._icon)
+                return;
+            if (cover)
+                this._showCover(cover.icon);
+            else
+                this._showIcon(appIcon);
+            this._setPalette(cover?.palette ?? null);
         });
+    }
+
+    _setPalette(palette) {
+        if (palette === this.palette)
+            return;
+        this.palette = palette;
+        this.emit('palette-changed');
     }
 
     _showIcon(gicon) {

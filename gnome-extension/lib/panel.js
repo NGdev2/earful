@@ -11,6 +11,8 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 
 import {CoverArt} from './art.js';
+import * as Look from './look.js';
+import {SourceLine} from './widgets.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -65,6 +67,15 @@ class VolumeSlider extends St.BoxLayout {
 
     bindPlayer(player) {
         this._bind(player, []);
+    }
+
+    /** Inline style for the bar, e.g. the cover's accent color. */
+    setSliderStyle(style) {
+        if (this._slider.style === style)
+            return;
+        this._slider.style = style;
+        // The bar is drawn once and only redrawn on request.
+        this._slider.queue_repaint();
     }
 
     bindStreams(streams) {
@@ -132,27 +143,6 @@ class VolumeSlider extends St.BoxLayout {
     }
 });
 
-/** Small app icon plus a name, e.g. the browser's icon and "Twitch · Chrome". */
-const SourceLine = GObject.registerClass(
-class SourceLine extends St.BoxLayout {
-    _init() {
-        super._init({style_class: 'earful-source'});
-        this._icon = new St.Icon({
-            style_class: 'earful-source-icon',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        this._label = new St.Label({y_align: Clutter.ActorAlign.CENTER});
-        this.add_child(this._icon);
-        this.add_child(this._label);
-    }
-
-    setPlayer(player) {
-        this._icon.gicon = player.appIcon;
-        this._label.text = player.sourceName;
-        this.visible = this._label.text !== '';
-    }
-});
-
 // Cover size per menu style, in logical pixels.
 const COVER_SIZES = {cards: 64, list: 48, compact: 32};
 
@@ -173,7 +163,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-text',
         });
-        this._source = new SourceLine();
+        this._source = new SourceLine('earful-source');
         this._title = new St.Label({style_class: 'earful-title'});
         this._artist = new St.Label({style_class: 'earful-artist'});
         if (style !== 'compact')
@@ -246,9 +236,30 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
         settings.connectObject(
             'changed::media-keys-target', () => this._syncPin(),
             'changed::media-keys-pinned', () => this._syncPin(),
+            'changed::design', () => this._restyle(),
+            'changed::design-opacity', () => this._restyle(),
+            'changed::animations', () => this._restyle(),
             this);
+        this._art.connect('palette-changed', () => this._restyle());
+        // Painted cards can't use the theme's hover color.
+        this.connect('notify::active', () => this._restyle());
         this._sync();
         this._syncPin();
+    }
+
+    _restyle() {
+        const look = Look.lookFromSettings(this._settings);
+        const palette = this._art.palette;
+        if (this._style === 'cards') {
+            this.style = Look.surfaceStyle(look, palette, this.active);
+            if (Look.isPainted(look))
+                this.add_style_class_name('earful-painted');
+            else
+                this.remove_style_class_name('earful-painted');
+            this._volume.setSliderStyle(Look.sliderStyle(look, palette));
+        }
+        this._source.update(this.player, this._settings.get_boolean('animations'),
+            Look.accentColor(look, palette));
     }
 
     _syncVolume() {
@@ -271,7 +282,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
     _sync() {
         const p = this.player;
         this._art.setPlayer(p);
-        this._source.setPlayer(p);
+        this._restyle();
         this._title.text = p.title;
         this._artist.text = p.artistText;
         this._artist.visible = this._artist.text !== '';

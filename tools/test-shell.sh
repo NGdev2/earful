@@ -63,7 +63,7 @@ gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2>&1 &
 P2=$!
 sleep "$STEP"
 if [ -n "$SHOTS" ]; then
-    for _ in $(seq 40); do [ -e "$SHOTS/done" ] && break; sleep 1; done
+    for _ in $(seq 60); do [ -e "$SHOTS/done" ] && break; sleep 1; done
     rm -f "$SHOTS/done"
 fi
 for kv in "toast-position bottom-left" "show-panel-label true" \

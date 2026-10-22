@@ -257,3 +257,43 @@
 .earful-toast-artist {
   opacity: 0.8;
 }
+
+/* Dancing bars next to what is playing */
+
+.earful-eq {
+  spacing: 2px;
+  padding-left: 2px;
+}
+
+.earful-eq-bar {
+  width: 3px;
+  height: 11px;
+  border-radius: 1px;
+  background-color: rgba(128, 128, 128, 0.9);
+}
+
+.earful-toast .earful-eq-bar {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+/* Cards painted by a design (cover colors, glass): white on color. */
+
+.earful-painted .earful-cover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.earful-painted .earful-cover:cover {
+  background-color: transparent;
+}
+
+.earful-painted .earful-control:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.earful-painted .earful-play {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.earful-painted .earful-play:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}

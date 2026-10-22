@@ -1,5 +1,5 @@
 // Test-only helper for tools/test-shell.sh: inside the throwaway shell it
-// opens Earful's menu in every style and saves screenshots to
+// opens Earful's menu in every style and design and saves screenshots to
 // $EARFUL_SHOTS, then writes $EARFUL_SHOTS/done. Never install it for real.
 
 import Gio from 'gi://Gio';
@@ -11,6 +11,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const OUT = GLib.getenv('EARFUL_SHOTS');
 const STYLES = ['cards', 'list', 'compact'];
+const DESIGNS = ['cover', 'glass', 'system'];
 
 const wait = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
     resolve();
@@ -38,18 +39,27 @@ export default class ShotsHelper extends Extension {
         const settings = earful._settings;
         // Popups go to the other corner so they don't cover the menu.
         settings.set_string('toast-position', 'bottom-right');
-        for (const style of STYLES) {
+        const menu = async (style, design) => {
             settings.set_string('menu-style', style);
+            settings.set_string('design', design);
             await wait(600);
             earful.menu.open(false);
             await wait(1500);
-            await shot(`menu-${style}`);
+            await shot(`menu-${style}-${design}`);
             earful.menu.close(false);
             await wait(400);
-        }
+        };
+        for (const design of DESIGNS)
+            await menu('cards', design);
+        for (const style of STYLES.filter(s => s !== 'cards'))
+            await menu(style, 'cover');
         settings.reset('menu-style');
-        await wait(2500);
-        await shot('popups');
+        for (const design of DESIGNS) {
+            settings.set_string('design', design);
+            await wait(3500);
+            await shot(`popups-${design}`);
+        }
+        settings.reset('design');
     }
 
     disable() {}

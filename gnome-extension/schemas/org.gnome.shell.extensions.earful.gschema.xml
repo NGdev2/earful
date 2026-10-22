@@ -66,6 +66,25 @@
       <default>'cards'</default>
       <summary>How players look in the top bar menu</summary>
     </key>
+    <key name="design" type="s">
+      <choices>
+        <choice value="cover"/>
+        <choice value="glass"/>
+        <choice value="system"/>
+      </choices>
+      <default>'cover'</default>
+      <summary>Colors of popups and menu cards</summary>
+      <description>'cover' takes them from the album cover.</description>
+    </key>
+    <key name="design-opacity" type="i">
+      <range min="40" max="100"/>
+      <default>92</default>
+      <summary>How opaque popups and cards are, in percent</summary>
+    </key>
+    <key name="animations" type="b">
+      <default>true</default>
+      <summary>Dancing bars next to what is playing</summary>
+    </key>
     <key name="show-panel-label" type="b">
       <default>false</default>
       <summary>Show the current track next to the icon</summary>

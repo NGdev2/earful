@@ -10,6 +10,8 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {CoverArt} from './art.js';
+import * as Look from './look.js';
+import {SourceLine} from './widgets.js';
 
 const WIDTH = 380;
 const COVER_SIZE = 72;
@@ -26,13 +28,14 @@ function scaleFactor() {
 
 const Toast = GObject.registerClass(
 class Toast extends St.Button {
-    _init(player) {
+    _init(player, settings) {
         super._init({
             style_class: 'earful-toast',
             width: WIDTH * scaleFactor(),
             opacity: 0,
         });
         this.player = player;
+        this._settings = settings;
 
         // A button centers its child; the card's content starts at the left.
         const box = new St.BoxLayout({
@@ -49,17 +52,10 @@ class Toast extends St.Button {
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-toast-text',
         });
-        const source = new St.BoxLayout({style_class: 'earful-toast-source'});
-        this._sourceIcon = new St.Icon({
-            style_class: 'earful-toast-source-icon',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        this._source = new St.Label({y_align: Clutter.ActorAlign.CENTER});
-        source.add_child(this._sourceIcon);
-        source.add_child(this._source);
+        this._source = new SourceLine('earful-toast-source');
         this._title = new St.Label({style_class: 'earful-toast-title'});
         this._artist = new St.Label({style_class: 'earful-toast-artist'});
-        text.add_child(source);
+        text.add_child(this._source);
         text.add_child(this._title);
         text.add_child(this._artist);
         box.add_child(text);
@@ -70,18 +66,32 @@ class Toast extends St.Button {
         player.connectObject('changed', () => {
             if (player.trackKey === this._trackKey)
                 this._art.setPlayer(player);
+            this._restyle();
         }, this);
+        this._art.connect('palette-changed', () => this._restyle());
+        this.connect('notify::hover', () => this._restyle());
+        settings.connectObject(
+            'changed::design', () => this._restyle(),
+            'changed::design-opacity', () => this._restyle(),
+            'changed::animations', () => this._restyle(),
+            this);
 
         this.showTrack();
+    }
+
+    _restyle() {
+        const look = Look.lookFromSettings(this._settings);
+        const palette = this._art.palette;
+        this.style = Look.surfaceStyle(look, palette, this.hover);
+        this._source.update(this.player, this._settings.get_boolean('animations'),
+            Look.accentColor(look, palette));
     }
 
     showTrack() {
         const p = this.player;
         this._trackKey = p.trackKey;
         this._art.setPlayer(p);
-        this._sourceIcon.gicon = p.appIcon;
-        this._source.text = p.sourceName;
-        this._source.get_parent().visible = this._source.text !== '';
+        this._restyle();
         this._title.text = p.title;
         this._artist.text = p.artistText;
         this._artist.visible = this._artist.text !== '';
@@ -173,7 +183,7 @@ export class ToastManager {
 
         this._monitor = this._targetMonitor();
 
-        const toast = new Toast(player);
+        const toast = new Toast(player, this._settings);
         toast.connect('clicked', () => {
             player.raise();
             this._dismiss(toast, SLIDE_IN_MS);

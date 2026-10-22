@@ -21,6 +21,12 @@ const MENU_STYLES = [
     ['compact', () => _('Compact (no sliders)')],
 ];
 
+const DESIGNS = [
+    ['cover', () => _('Cover colors')],
+    ['glass', () => _('Dark glass')],
+    ['system', () => _('System theme')],
+];
+
 const MEDIA_KEY_TARGETS = [
     ['default', () => _('Let the system choose')],
     ['last-active', () => _('Last active player')],
@@ -185,6 +191,18 @@ export default class EarfulPreferences extends ExtensionPreferences {
         const panel = new Adw.PreferencesGroup({title: _('Top bar')});
         page.add(panel);
         panel.add(choiceRow(window, settings, 'menu-style', _('Menu style'), MENU_STYLES));
+        panel.add(choiceRow(window, settings, 'design', _('Design'), DESIGNS,
+            _('Colors of popups and cards. Cover colors follow each album.')));
+        const opacity = spinRow(settings, 'design-opacity', _('Opacity (%)'), 40, 100);
+        // The system theme brings its own background.
+        const syncOpacity = () =>
+            (opacity.sensitive = settings.get_string('design') !== 'system');
+        syncOpacity();
+        const designId = settings.connect('changed::design', syncOpacity);
+        window.connect('close-request', () => settings.disconnect(designId));
+        panel.add(opacity);
+        panel.add(switchRow(settings, 'animations', _('Animations'),
+            _('Little bars dance next to what is playing.')));
         panel.add(switchRow(settings, 'show-panel-label',
             _('Show the playing track next to the icon')));
         panel.add(spinRow(settings, 'panel-label-max-chars', _('Label length'), 10, 80));
