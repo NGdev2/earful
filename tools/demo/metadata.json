@@ -1,0 +1,6 @@
+{
+  "uuid": "earful-demo@test",
+  "name": "Earful demo director (tools only)",
+  "description": "Used by tools/record-demo.sh inside a throwaway shell.",
+  "shell-version": ["46", "47", "48", "49", "50"]
+}

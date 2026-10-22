@@ -155,6 +155,31 @@ export default class EarfulPreferences extends ExtensionPreferences {
         const page = new Adw.PreferencesPage();
         window.add(page);
 
+        // Look
+        const look = new Adw.PreferencesGroup({
+            title: _('Look'),
+            description: _('Make the menu and popups yours.'),
+        });
+        page.add(look);
+        look.add(choiceRow(window, settings, 'menu-style', _('Menu style'), MENU_STYLES));
+        look.add(choiceRow(window, settings, 'design', _('Design'), DESIGNS,
+            _('Popups and cards. Scenes like Vinyl move while music plays.')));
+        const color = choiceRow(window, settings, 'design-color', _('Color'), COLORS);
+        const opacity = spinRow(settings, 'design-opacity', _('Opacity (%)'), 40, 100);
+        // The system theme brings its own colors and background.
+        const syncDesign = () => {
+            const own = settings.get_string('design') !== 'system';
+            color.sensitive = own;
+            opacity.sensitive = own;
+        };
+        syncDesign();
+        const designId = settings.connect('changed::design', syncDesign);
+        window.connect('close-request', () => settings.disconnect(designId));
+        look.add(color);
+        look.add(opacity);
+        look.add(switchRow(settings, 'animations', _('Animations'),
+            _('Moving scenes and little dancing bars while music plays.')));
+
         // Popups
         const popups = new Adw.PreferencesGroup({
             title: _('Now playing popups'),
@@ -207,24 +232,6 @@ export default class EarfulPreferences extends ExtensionPreferences {
         // Top bar
         const panel = new Adw.PreferencesGroup({title: _('Top bar')});
         page.add(panel);
-        panel.add(choiceRow(window, settings, 'menu-style', _('Menu style'), MENU_STYLES));
-        panel.add(choiceRow(window, settings, 'design', _('Design'), DESIGNS,
-            _('Popups and cards. Scenes like Vinyl move while music plays.')));
-        const color = choiceRow(window, settings, 'design-color', _('Color'), COLORS);
-        const opacity = spinRow(settings, 'design-opacity', _('Opacity (%)'), 40, 100);
-        // The system theme brings its own colors and background.
-        const syncDesign = () => {
-            const own = settings.get_string('design') !== 'system';
-            color.sensitive = own;
-            opacity.sensitive = own;
-        };
-        syncDesign();
-        const designId = settings.connect('changed::design', syncDesign);
-        window.connect('close-request', () => settings.disconnect(designId));
-        panel.add(color);
-        panel.add(opacity);
-        panel.add(switchRow(settings, 'animations', _('Animations'),
-            _('Moving scenes and little dancing bars while music plays.')));
         panel.add(switchRow(settings, 'show-panel-label',
             _('Show the playing track next to the icon')));
         panel.add(spinRow(settings, 'panel-label-max-chars', _('Label length'), 10, 80));

@@ -8,6 +8,12 @@
 //
 // Set FAKE_PLAYER_NO_VOLUME=1 to leave out the MPRIS Volume property, like
 // players whose volume Earful has to find in the sound mixer.
+//
+// For demos, these make it look like a real player:
+//   FAKE_PLAYER_BUS       bus name suffix, e.g. earful_tab_7.instance42
+//   FAKE_PLAYER_IDENTITY  e.g. "YouTube — Google Chrome"
+//   FAKE_PLAYER_DESKTOP   desktop entry for the icon, e.g. google-chrome
+//   FAKE_PLAYER_TRACKS    JSON file: [[title, artist, album, cover path], ...]
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -17,7 +23,7 @@ const [name = 'FakePlayer', secondsArg = '8', artDir = ''] = programArgs;
 const seconds = Number(secondsArg);
 const hasVolume = !GLib.getenv('FAKE_PLAYER_NO_VOLUME');
 
-const TRACKS = [
+let TRACKS = [
     ['Midnight Compiler', 'The Semicolons', 'Build Passing'],
     ['Merge Conflict Blues', 'Rebase & The Heads', 'Detached'],
     ['Stack Overflow', 'Null Pointer', 'Segfault Sessions'],
@@ -25,8 +31,14 @@ const TRACKS = [
     ['Hello, World', 'The Printlns', 'First Commit'],
 ];
 
-const covers = [];
-if (artDir) {
+let covers = [];
+const tracksFile = GLib.getenv('FAKE_PLAYER_TRACKS');
+if (tracksFile) {
+    const [, contents] = GLib.file_get_contents(tracksFile);
+    const tracks = JSON.parse(new TextDecoder().decode(contents));
+    TRACKS = tracks.map(([title, artist, album]) => [title, artist, album]);
+    covers = tracks.map(t => (t[3] ? Gio.File.new_for_path(t[3]).get_uri() : ''));
+} else if (artDir) {
     const dir = Gio.File.new_for_path(artDir);
     const files = dir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
     let info;
@@ -78,8 +90,8 @@ const player = {
     CanRaise: true,
     CanQuit: true,
     HasTrackList: false,
-    Identity: name,
-    DesktopEntry: '',
+    Identity: GLib.getenv('FAKE_PLAYER_IDENTITY') ?? name,
+    DesktopEntry: GLib.getenv('FAKE_PLAYER_DESKTOP') ?? '',
     SupportedUriSchemes: [],
     SupportedMimeTypes: [],
     CanGoNext: true,
@@ -110,8 +122,9 @@ const player = {
             'xesam:artist': new GLib.Variant('as', [artist]),
             'xesam:album': new GLib.Variant('s', album),
         };
-        if (covers.length)
-            metadata['mpris:artUrl'] = new GLib.Variant('s', covers[index % covers.length]);
+        const cover = covers.length ? covers[index % covers.length] : '';
+        if (cover)
+            metadata['mpris:artUrl'] = new GLib.Variant('s', cover);
         return metadata;
     },
 
@@ -173,7 +186,7 @@ function changeTrack(delta) {
 const loop = new GLib.MainLoop(null, false);
 
 Gio.bus_own_name(Gio.BusType.SESSION,
-    `org.mpris.MediaPlayer2.${name.replace(/[^A-Za-z0-9_]/g, '_')}`,
+    `org.mpris.MediaPlayer2.${GLib.getenv('FAKE_PLAYER_BUS') ?? name.replace(/[^A-Za-z0-9_]/g, '_')}`,
     Gio.BusNameOwnerFlags.NONE,
     connection => {
         exportedRoot.export(connection, '/org/mpris/MediaPlayer2');

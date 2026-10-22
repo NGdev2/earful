@@ -4,7 +4,7 @@ DIST := dist
 INSTALL_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
 .PHONY: all schemas pack install uninstall nested test lint clean \
-	bridge-install bridge-uninstall bridge-test bridge-test-browser
+	bridge-install bridge-uninstall bridge-test bridge-test-browser demo
 
 all: pack
 
@@ -49,6 +49,10 @@ bridge-test-browser:
 # Isolated headless GNOME Shell smoke test (never touches your session).
 test:
 	tools/test-shell.sh
+
+# Records the README pictures into docs/media (needs ffmpeg).
+demo:
+	tools/record-demo.sh
 
 lint:
 	npx --yes eslint@9.13.0 $(SRC) tools native-host chromium-extension

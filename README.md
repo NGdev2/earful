@@ -7,7 +7,7 @@
 See and control everything that plays on your Linux desktop — Spotify, YouTube tabs, Twitch, podcasts —
 from one button in the top bar. Catch the song name in a gentle popup, then get back to work.
 
-<!-- Demo GIF goes here: docs/media/demo.gif -->
+<img src="docs/media/hero.gif" alt="Track changes pop up in the corner, stack, and glide away" width="520">
 
 ![GNOME 46–50](https://img.shields.io/badge/GNOME-46%E2%80%9350-4a86cf?logo=gnome&logoColor=white)
 ![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)
@@ -27,13 +27,35 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 
 🔊 **A mini mixer** — a volume slider on every player and every tab, plus (optional) apps that only make sound, like games and calls.
 
+<p align="center">
+  <img src="docs/media/menu.gif" alt="The menu: Spotify and two browser tabs, each with cover colors, controls and volume" width="440">
+</p>
+
+🎨 **Your look** — a spinning vinyl, a cassette, a retro hi-fi equalizer, a sound wave or a note riding the road, in the colors of each album cover or one you pick. Or keep it calm: a gradient, dark glass, or your system theme.
+
+<p align="center">
+  <img src="docs/media/designs.gif" alt="Switching designs: gradient, glass, vinyl, sound wave, retro equalizer, note road, cassette" width="440">
+</p>
+<p align="center">
+  <img src="docs/media/popups.png" alt="Popups in the vinyl, cassette, note road and retro equalizer designs" width="760">
+</p>
+
 ⏯️ **Your rules** — pause other players when one starts (with exceptions), and send media keys to the last active or a pinned player.
 
 🤫 **Focus mode** — deep in code? One shortcut (<kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd>) silences every popup. No popups over fullscreen games or while Do Not Disturb is on.
 
-🎨 **Your look** — a spinning vinyl, a cassette, a retro hi-fi equalizer, a sound wave or a note riding the road, in the colors of each album cover or one you pick. Or keep it calm: a gradient, dark glass, or your system theme.
-
 🎚️ **You decide** — cards, list or compact menu; popup position, duration, how many at once, and which players are allowed to show them.
+
+<details>
+<summary>More screenshots</summary>
+<br>
+<p align="center">
+  <img src="docs/media/styles.png" alt="Menu styles: cards, list and compact" width="820">
+</p>
+<p align="center">
+  <img src="docs/media/settings.png" alt="Earful settings: menu style, design, color, opacity, animations" width="520">
+</p>
+</details>
 
 ## Coming next
 
@@ -74,6 +96,7 @@ Earful listens to [MPRIS](https://specifications.freedesktop.org/mpris-spec/late
 Ideas, bugs and pull requests are welcome — open an [issue](https://github.com/NGdev2/earful/issues).
 Test without real music using the fake player: `gjs -m tools/fake-player.js MyPlayer 5`.
 `make test` runs Earful in an invisible, isolated GNOME Shell; `make lint` and `make bridge-test` check the rest.
+`make demo` records the pictures above the same way, with made-up songs and covers.
 
 ## License
 
