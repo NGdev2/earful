@@ -12,6 +12,7 @@ import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
+import {SceneLayer} from './scenes.js';
 import {SourceLine} from './widgets.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -143,6 +144,9 @@ class VolumeSlider extends St.BoxLayout {
     }
 });
 
+// Must match .earful-cards in stylesheet.css (minus the border).
+const CARD_RADIUS = 15;
+
 // Cover size per menu style, in logical pixels.
 const COVER_SIZES = {cards: 64, list: 48, compact: 32};
 
@@ -217,7 +221,16 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             bottom.add_child(controls);
             column.add_child(top);
             column.add_child(bottom);
-            this.add_child(column);
+            // The design's scene lies under the content, edge to edge.
+            column.style_class = 'earful-card-content';
+            this._scene = new SceneLayer(CARD_RADIUS);
+            const stack = new St.Widget({
+                layout_manager: new Clutter.BinLayout(),
+                x_expand: true,
+            });
+            stack.add_child(this._scene);
+            stack.add_child(column);
+            this.add_child(stack);
         } else {
             if (this._volume)
                 text.add_child(this._volume);
@@ -237,6 +250,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             'changed::media-keys-target', () => this._syncPin(),
             'changed::media-keys-pinned', () => this._syncPin(),
             'changed::design', () => this._restyle(),
+            'changed::design-color', () => this._restyle(),
             'changed::design-opacity', () => this._restyle(),
             'changed::animations', () => this._restyle(),
             this);
@@ -257,9 +271,9 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             else
                 this.remove_style_class_name('earful-painted');
             this._volume.setSliderStyle(Look.sliderStyle(look, palette));
+            this._scene.update(look, palette, this.player.isPlaying);
         }
-        this._source.update(this.player, this._settings.get_boolean('animations'),
-            Look.accentColor(look, palette));
+        this._source.update(this.player, look.animate, Look.accentColor(look, palette));
     }
 
     _syncVolume() {

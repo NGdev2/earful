@@ -66,7 +66,7 @@ function rgbToHsl([r, g, b]) {
     return [h / 6, s, l];
 }
 
-function hslToRgb([h, s, l]) {
+export function hslToRgb([h, s, l]) {
     const hue = t => {
         t = (t + 1) % 1;
         const q = l < 0.5 ? l * (1 + s) : l + s - l * s;

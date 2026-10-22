@@ -6,7 +6,7 @@ import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
 const BARS = 3;
-// Heights the bars rest at when animations are off.
+// Heights the bars rest at between dances.
 const STILL = [0.55, 1, 0.75];
 
 /** Three little bars that dance while a player plays. */
@@ -60,9 +60,10 @@ class Equalizer extends St.BoxLayout {
     }
 
     _sync() {
-        this.visible = this._playing;
+        // The bars are an animation; without animations they are hidden.
         const run = this._playing && this._animate &&
             St.Settings.get().enable_animations;
+        this.visible = run;
         this._bars.forEach((bar, i) => {
             const dance = run && bar.mapped;
             if (dance === this._dancing.has(bar))

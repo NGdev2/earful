@@ -11,10 +11,13 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
+import {SceneLayer} from './scenes.js';
 import {SourceLine} from './widgets.js';
 
 const WIDTH = 380;
 const COVER_SIZE = 72;
+// Must match .earful-toast in stylesheet.css (minus the border).
+const RADIUS = 19;
 const MARGIN = 16;
 const SPACING = 10;
 const SLIDE_IN_MS = 250;
@@ -59,7 +62,15 @@ class Toast extends St.Button {
         text.add_child(this._title);
         text.add_child(this._artist);
         box.add_child(text);
-        this.set_child(box);
+        // The design's scene lies under the content, edge to edge.
+        this._scene = new SceneLayer(RADIUS);
+        const stack = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+            x_expand: true,
+        });
+        stack.add_child(this._scene);
+        stack.add_child(box);
+        this.set_child(stack);
 
         // Cover art often arrives a moment after the title; keep it fresh
         // as long as the same track is shown.
@@ -72,6 +83,7 @@ class Toast extends St.Button {
         this.connect('notify::hover', () => this._restyle());
         settings.connectObject(
             'changed::design', () => this._restyle(),
+            'changed::design-color', () => this._restyle(),
             'changed::design-opacity', () => this._restyle(),
             'changed::animations', () => this._restyle(),
             this);
@@ -83,8 +95,8 @@ class Toast extends St.Button {
         const look = Look.lookFromSettings(this._settings);
         const palette = this._art.palette;
         this.style = Look.surfaceStyle(look, palette, this.hover);
-        this._source.update(this.player, this._settings.get_boolean('animations'),
-            Look.accentColor(look, palette));
+        this._scene.update(look, palette, this.player.isPlaying);
+        this._source.update(this.player, look.animate, Look.accentColor(look, palette));
     }
 
     showTrack() {

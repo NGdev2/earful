@@ -70,11 +70,32 @@
       <choices>
         <choice value="cover"/>
         <choice value="glass"/>
+        <choice value="vinyl"/>
+        <choice value="wave"/>
+        <choice value="leds"/>
+        <choice value="road"/>
+        <choice value="cassette"/>
         <choice value="system"/>
       </choices>
       <default>'cover'</default>
-      <summary>Colors of popups and menu cards</summary>
-      <description>'cover' takes them from the album cover.</description>
+      <summary>Look of popups and menu cards</summary>
+      <description>'cover' is a gradient; vinyl, wave, leds, road and cassette are animated scenes.</description>
+    </key>
+    <key name="design-color" type="s">
+      <choices>
+        <choice value="cover"/>
+        <choice value="purple"/>
+        <choice value="blue"/>
+        <choice value="teal"/>
+        <choice value="green"/>
+        <choice value="amber"/>
+        <choice value="red"/>
+        <choice value="pink"/>
+        <choice value="graphite"/>
+      </choices>
+      <default>'cover'</default>
+      <summary>Color of the design</summary>
+      <description>'cover' takes it from each album cover.</description>
     </key>
     <key name="design-opacity" type="i">
       <range min="40" max="100"/>

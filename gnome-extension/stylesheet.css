@@ -117,7 +117,7 @@
 
 .earful-cards {
   margin: 3px 6px;
-  padding: 12px;
+  padding: 0;
   border-radius: 16px;
   background-color: rgba(128, 128, 128, 0.08);
 }
@@ -137,6 +137,10 @@
 
 .earful-cards .earful-artist {
   max-width: 250px;
+}
+
+.earful-card-content {
+  padding: 12px;
 }
 
 .earful-card-top {
@@ -209,7 +213,7 @@
   background-color: rgba(28, 28, 32, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
-  padding: 12px;
+  padding: 0;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   color: #f2f2f2;
 }
@@ -220,6 +224,7 @@
 
 .earful-toast-box {
   spacing: 14px;
+  padding: 12px;
 }
 
 .earful-toast .earful-cover {

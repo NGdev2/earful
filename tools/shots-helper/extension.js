@@ -11,7 +11,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const OUT = GLib.getenv('EARFUL_SHOTS');
 const STYLES = ['cards', 'list', 'compact'];
-const DESIGNS = ['cover', 'glass', 'system'];
+const DESIGNS = ['cover', 'glass', 'vinyl', 'wave', 'leds', 'road', 'cassette', 'system'];
 
 const wait = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
     resolve();
@@ -39,22 +39,26 @@ export default class ShotsHelper extends Extension {
         const settings = earful._settings;
         // Popups go to the other corner so they don't cover the menu.
         settings.set_string('toast-position', 'bottom-right');
-        const menu = async (style, design) => {
+        const menu = async (style, design, color = 'cover') => {
             settings.set_string('menu-style', style);
             settings.set_string('design', design);
+            settings.set_string('design-color', color);
             await wait(600);
             earful.menu.open(false);
             await wait(1500);
-            await shot(`menu-${style}-${design}`);
+            await shot(`menu-${style}-${design}${color === 'cover' ? '' : `-${color}`}`);
             earful.menu.close(false);
             await wait(400);
         };
         for (const design of DESIGNS)
             await menu('cards', design);
+        await menu('cards', 'leds', 'green');
+        await menu('cards', 'vinyl', 'amber');
+        settings.reset('design-color');
         for (const style of STYLES.filter(s => s !== 'cards'))
             await menu(style, 'cover');
         settings.reset('menu-style');
-        for (const design of DESIGNS) {
+        for (const design of ['cover', 'vinyl', 'road']) {
             settings.set_string('design', design);
             await wait(3500);
             await shot(`popups-${design}`);

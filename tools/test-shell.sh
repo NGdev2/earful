@@ -63,7 +63,7 @@ gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2>&1 &
 P2=$!
 sleep "$STEP"
 if [ -n "$SHOTS" ]; then
-    for _ in $(seq 60); do [ -e "$SHOTS/done" ] && break; sleep 1; done
+    for _ in $(seq 100); do [ -e "$SHOTS/done" ] && break; sleep 1; done
     rm -f "$SHOTS/done"
 fi
 for kv in "toast-position bottom-left" "show-panel-label true" \
@@ -86,7 +86,7 @@ env "$MARKER" EXT="$EXT" UUID="$UUID" EXTENSIONS="$EXTENSIONS" \
     SHOTS="$SHOTS" EARFUL_SHOTS="$SHOTS" ROOT="$ROOT" WORK="$WORK" STEP="$STEP" \
     PATH="$WORK/bin:$PATH" \
     XDG_DATA_HOME="$WORK/data" XDG_CONFIG_HOME="$WORK/config" XDG_CACHE_HOME="$WORK/cache" \
-    timeout 120 dbus-run-session -- bash "$WORK/scenario.sh" 2>/dev/null
+    timeout 200 dbus-run-session -- bash "$WORK/scenario.sh" 2>/dev/null
 
 errors=$(grep -E "JS ERROR|JS WARNING|earful" "$WORK/shell.log")
 if [ -n "$errors" ]; then
