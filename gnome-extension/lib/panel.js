@@ -316,6 +316,11 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
         this._syncVolume();
     }
 
+    /** Colors of the shown cover, or null. */
+    get coverPalette() {
+        return this._art.palette;
+    }
+
     activate(event) {
         this.player.raise();
         super.activate(event);
@@ -430,6 +435,10 @@ class EarfulIndicator extends PanelMenu.Button {
             'changed::hide-when-idle', () => this._syncPanel(),
             'changed::show-audio-only-apps', () => this._syncOthers(),
             'changed::menu-style', () => this._queueRebuild(),
+            'changed::menu-background', () => this._syncBackground(),
+            'changed::design', () => this._syncBackground(),
+            'changed::design-color', () => this._syncBackground(),
+            'changed::design-opacity', () => this._syncBackground(),
             this);
         audio.connectObject('changed', () => this._syncOthers(), this);
 
@@ -464,6 +473,8 @@ class EarfulIndicator extends PanelMenu.Button {
                 this._queueRebuild();
             } else {
                 this._syncPanel();
+                // Another player may have become the current one.
+                this._syncBackground();
             }
         }, this);
         player.connectObject('closed', () => {
@@ -497,8 +508,11 @@ class EarfulIndicator extends PanelMenu.Button {
         for (const name of ['cards', 'list', 'compact'])
             this.menu.box.remove_style_class_name(`earful-menu-${name}`);
         this.menu.box.add_style_class_name(`earful-menu-${style}`);
-        for (const player of players)
-            this._section.addMenuItem(new PlayerItem(player, this._audio, this._settings, style));
+        for (const player of players) {
+            const item = new PlayerItem(player, this._audio, this._settings, style);
+            item._art.connect('palette-changed', () => this._syncBackground());
+            this._section.addMenuItem(item);
+        }
 
         if (players.length === 0) {
             const empty = new PopupMenu.PopupMenuItem(_('Nothing is playing'),
@@ -508,6 +522,25 @@ class EarfulIndicator extends PanelMenu.Button {
         }
 
         this._syncPanel();
+        this._syncBackground();
+    }
+
+    /** Paints the menu box itself, e.g. in the current song's colors. */
+    _syncBackground() {
+        // The current song's colors, or the next one that has a cover.
+        const current = this._manager.current;
+        const items = this._section._getMenuItems().filter(i => i.coverPalette !== undefined);
+        const item = items.find(i => i.player === current && i.coverPalette) ??
+            items.find(i => i.coverPalette);
+        const look = Look.lookFromSettings(this._settings);
+        const {style, painted} = Look.menuStyle(
+            this._settings.get_string('menu-background'), look, item?.coverPalette ?? null);
+        if (this.menu.box.style !== style)
+            this.menu.box.style = style;
+        if (painted)
+            this.menu.box.add_style_class_name('earful-menu-painted');
+        else
+            this.menu.box.remove_style_class_name('earful-menu-painted');
     }
 
     _syncOthers() {

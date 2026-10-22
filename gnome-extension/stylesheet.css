@@ -302,3 +302,20 @@
 .earful-painted .earful-play:hover {
   background-color: rgba(255, 255, 255, 0.3);
 }
+
+/* A menu box painted by Earful (dark, the music's colors, transparent):
+   light text and separators whatever the theme. */
+
+.earful-menu-painted,
+.earful-menu-painted .popup-menu-item {
+  color: #fafafa;
+}
+
+.earful-menu-painted .popup-menu-item:hover,
+.earful-menu-painted .popup-menu-item:focus {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.earful-menu-painted .popup-separator-menu-item-separator {
+  background-color: rgba(255, 255, 255, 0.14);
+}

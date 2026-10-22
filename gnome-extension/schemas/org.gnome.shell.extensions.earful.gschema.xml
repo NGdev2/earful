@@ -66,6 +66,17 @@
       <default>'cards'</default>
       <summary>How players look in the top bar menu</summary>
     </key>
+    <key name="menu-background" type="s">
+      <choices>
+        <choice value="theme"/>
+        <choice value="dark"/>
+        <choice value="music"/>
+        <choice value="transparent"/>
+      </choices>
+      <default>'theme'</default>
+      <summary>Background of the top bar menu</summary>
+      <description>'music' takes the colors of the song that is playing.</description>
+    </key>
     <key name="design" type="s">
       <choices>
         <choice value="cover"/>

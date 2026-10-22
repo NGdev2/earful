@@ -21,6 +21,13 @@ const MENU_STYLES = [
     ['compact', () => _('Compact (no sliders)')],
 ];
 
+const MENU_BACKGROUNDS = [
+    ['theme', () => _('Theme')],
+    ['dark', () => _('Dark')],
+    ['music', () => _('Match the music')],
+    ['transparent', () => _('Transparent')],
+];
+
 const DESIGNS = [
     ['cover', () => _('Gradient')],
     ['glass', () => _('Dark glass')],
@@ -162,6 +169,8 @@ export default class EarfulPreferences extends ExtensionPreferences {
         });
         page.add(look);
         look.add(choiceRow(window, settings, 'menu-style', _('Menu style'), MENU_STYLES));
+        look.add(choiceRow(window, settings, 'menu-background', _('Menu background'),
+            MENU_BACKGROUNDS, _('Match the music takes the colors of the song that is playing.')));
         look.add(choiceRow(window, settings, 'design', _('Design'), DESIGNS,
             _('Popups and cards. Scenes like Vinyl move while music plays.')));
         const color = choiceRow(window, settings, 'design-color', _('Color'), COLORS);

@@ -39,19 +39,25 @@ export default class ShotsHelper extends Extension {
         const settings = earful._settings;
         // Popups go to the other corner so they don't cover the menu.
         settings.set_string('toast-position', 'bottom-right');
-        const menu = async (style, design, color = 'cover') => {
+        const menu = async (style, design, color = 'cover', name = '') => {
             settings.set_string('menu-style', style);
             settings.set_string('design', design);
             settings.set_string('design-color', color);
             await wait(600);
             earful.menu.open(false);
             await wait(1500);
-            await shot(`menu-${style}-${design}${color === 'cover' ? '' : `-${color}`}`);
+            await shot(name || `menu-${style}-${design}${color === 'cover' ? '' : `-${color}`}`);
             earful.menu.close(false);
             await wait(400);
         };
         for (const design of DESIGNS)
             await menu('cards', design);
+        for (const background of ['dark', 'music', 'transparent']) {
+            settings.set_string('menu-background', background);
+            await menu('cards', 'cover', 'cover', `background-${background}`);
+            await menu('list', 'system', 'cover', `background-${background}-list`);
+        }
+        settings.reset('menu-background');
         await menu('cards', 'leds', 'green');
         await menu('cards', 'vinyl', 'amber');
         settings.reset('design-color');

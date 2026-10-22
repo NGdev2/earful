@@ -94,3 +94,42 @@ export function sliderStyle(look, palette) {
     return `-barlevel-active-background-color: ${accent}; ` +
         '-barlevel-background-color: rgba(255, 255, 255, 0.18); color: #fafafa;';
 }
+
+// Mixes a color with black.
+const darken = (c, amount) => c.map(v => Math.round(v * (1 - amount)));
+
+/**
+ * Style of the menu box itself: 'theme' leaves it to the shell theme,
+ * 'dark' and 'music' (the current song's colors) paint it, 'transparent'
+ * lets the cards float. Returns {style, painted}; painted menus get light
+ * text.
+ */
+export function menuStyle(background, look, palette) {
+    const border = 'border: 1px solid rgba(255, 255, 255, 0.08);';
+    switch (background) {
+    case 'dark':
+        return {
+            style: `background-color: ${rgba([24, 24, 30], look.opacity)}; ${border}`,
+            painted: true,
+        };
+    case 'music': {
+        const {start, end} = paletteFor(look, palette);
+        // Deep enough for white text, and cross-fading to the next song.
+        return {
+            style: 'background-gradient-direction: vertical; ' +
+                `background-gradient-start: ${rgba(darken(start, 0.2), look.opacity)}; ` +
+                `background-gradient-end: ${rgba(darken(end, 0.4), look.opacity)}; ` +
+                `${border} transition-duration: 600ms;`,
+            painted: true,
+        };
+    }
+    case 'transparent':
+        return {
+            style: 'background-color: transparent; border-color: transparent; ' +
+                'box-shadow: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);',
+            painted: true,
+        };
+    default:
+        return {style: '', painted: false};
+    }
+}
