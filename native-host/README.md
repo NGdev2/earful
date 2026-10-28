@@ -7,15 +7,17 @@ per browser tab with media, so any MPRIS client (Earful, GNOME's own media
 controls, `playerctl`) sees each tab separately.
 
 ```bash
-make bridge-install        # register with Chromium / Chrome / Brave / Edge
+make bridge-install        # register with Chrome / Chromium / Brave / Edge / Firefox
 make bridge-uninstall
 make bridge-test           # host only, on a private D-Bus session
 make bridge-test-browser   # plus a throwaway headless Chrome profile
 ```
 
 `install.sh` writes `io.github.ngdev2.earful.json` into
-`~/.config/<browser>/NativeMessagingHosts/` for each browser that has a profile,
-pointing at `earful-host.js` in this folder, so keep the checkout where it is.
+`~/.config/<browser>/NativeMessagingHosts/` for each Chromium-based browser that
+has a profile, and into `~/.mozilla/native-messaging-hosts/` for Firefox (a Snap
+Firefox reads it through the desktop portal). It points at `earful-host.js` in
+this folder, so keep the checkout where it is.
 
 ## Bus names (contract with the GNOME extension)
 
@@ -35,10 +37,14 @@ with `org.mpris.MediaPlayer2` and `org.mpris.MediaPlayer2.Player` at
   `org.mpris.MediaPlayer2.chromium.instance<N>` while any
   `org.mpris.MediaPlayer2.earful_tab_*.instance<N>` exists**. The pid also
   keeps names unique when two browsers run the bridge at once.
+- Firefox's own player is `org.mpris.MediaPlayer2.firefox.*`. A Snap Firefox
+  starts the host through the desktop portal, so the pid doesn't match it;
+  hide it while any bridge player's `Identity` ends in `Firefox`.
 - `Identity` is `"<site> — <browser>"`, e.g. `YouTube — Google Chrome`.
   `DesktopEntry` is the browser's desktop file id (`google-chrome`,
   `chromium`, …) from `$CHROME_DESKTOP` if the launcher sets it, otherwise
-  from the extension.
+  from the extension. For Firefox the host picks the installed one
+  (`firefox_firefox` for Snap, `org.mozilla.firefox`, `firefox`).
 - Players come and go with their tabs. When the browser quits or the
   extension goes away, every name is released.
 

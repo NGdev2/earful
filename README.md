@@ -23,7 +23,7 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 
 🧭 **One click, every player** — all your players in one list, each with its own play / pause / next. Click a track to jump straight to its app.
 
-🗂️ **Every browser tab is its own player** — three YouTube tabs, three rows. Click one and Earful switches to that exact tab (Chromium, Chrome, Brave, Edge).
+🗂️ **Every browser tab is its own player** — three YouTube tabs, three rows. Click one and Earful switches to that exact tab (Chrome, Chromium, Brave, Edge, Firefox).
 
 🔊 **A mini mixer** — a volume slider on every player and every tab, plus (optional) apps that only make sound, like games and calls.
 
@@ -59,9 +59,8 @@ from one button in the top bar. Catch the song name in a gentle popup, then get 
 
 ## Coming next
 
-- 🦊 **Firefox** support for the per-tab bridge
 - 🙈 **Ignore list** for autoplay noise
-- 📦 One-click install from extensions.gnome.org and the Chrome Web Store
+- 📦 One-click install from extensions.gnome.org, the Chrome Web Store and Firefox Add-ons
 
 ## Install
 
@@ -79,13 +78,15 @@ Then log out and back in (on X11 you can press <kbd>Alt</kbd> + <kbd>F2</kbd>, t
 gnome-extensions enable earful@NGdev2.github.io
 ```
 
-**Per-tab browser players** (optional):
+**Per-tab browser players** (optional) — Chrome, Chromium, Brave, Edge and Firefox:
 
 1. `make bridge-install`
-2. Open `chrome://extensions`, turn on *Developer mode*, click *Load unpacked* and pick the `chromium-extension` folder.
+2. Add the extension:
+   - **Chrome & co.:** open `chrome://extensions`, turn on *Developer mode*, click *Load unpacked* and pick the `browser-extension` folder.
+   - **Firefox** (128 or newer, Snap too): run `make firefox`, open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on* and pick `dist/firefox-extension/manifest.json`.
 3. Reload tabs that were already playing.
 
-Details: [chromium-extension](chromium-extension/README.md) · [native-host](native-host/README.md)
+Details: [browser-extension](browser-extension/README.md) · [native-host](native-host/README.md)
 
 ## How it works
 

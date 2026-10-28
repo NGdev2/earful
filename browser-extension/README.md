@@ -1,6 +1,6 @@
-# Earful Bridge for Chromium and Google Chrome
+# Earful Bridge for Chrome, Chromium, Brave, Edge and Firefox
 
-Chromium shows only **one** media player to the desktop: whichever tab played
+Browsers show only **one** media player to the desktop: whichever tab played
 last. With three YouTube tabs open, two of them are invisible to GNOME.
 
 This extension, together with the small [native host](../native-host/), gives
@@ -10,20 +10,33 @@ click that jumps right to the tab.
 
 ## Install
 
-1. Open `chrome://extensions`, turn on **Developer mode**, click
-   **Load unpacked** and pick this `chromium-extension` folder.
-   The extension ID is always `gjpjaodbgfodpakidffoooacjemeidmn`.
-2. From the repository root, register the native host:
+1. From the repository root, register the native host for every browser
+   you have:
 
    ```bash
    make bridge-install      # make bridge-uninstall to undo
    ```
 
+2. Add the extension:
+   - **Chrome, Chromium, Brave, Edge:** open `chrome://extensions`, turn on
+     **Developer mode**, click **Load unpacked** and pick this
+     `browser-extension` folder. The extension ID is always
+     `gjpjaodbgfodpakidffoooacjemeidmn`.
+   - **Firefox 128 or newer:** run `make firefox`, open
+     `about:debugging#/runtime/this-firefox`, click
+     **Load Temporary Add-on** and pick `dist/firefox-extension/manifest.json`.
+     A temporary add-on is gone after Firefox restarts, until the signed
+     version is on Firefox Add-ons. The add-on ID is
+     `earful@ngdev2.github.io`.
 3. Reload tabs that were already open, or just start something new. If the
-   extension was loaded before the host was installed, click its reload
-   button once so it connects right away.
+   extension was loaded before the host was installed, reload it once so it
+   connects right away.
 
 Needs `gjs`, which every GNOME desktop already has.
+
+Firefox from Snap (Ubuntu's default) reaches the host through the desktop
+portal; the first time, your desktop may ask whether Firefox may start it.
+Firefox from Flatpak can't start programs outside its sandbox yet.
 
 ## Privacy
 
@@ -46,9 +59,9 @@ sees never leaves your computer:
 | `nativeMessaging` | Talk to the local native host that publishes the players on D-Bus. |
 | Content scripts on `<all_urls>`, all frames | Notice media on any site, including players embedded in other pages. This is what shows the "read and change data on all websites" warning; nothing is read beyond the media details listed above. |
 
-Raising a tab uses `chrome.tabs.update` and `chrome.windows.update`, which need
-no extra permission. There is no `tabs`, `history`, `storage` or host
-permission.
+Raising a tab uses `tabs.update` and `windows.update`, which need no extra
+permission. There is no `tabs`, `history` or `storage` permission. (Firefox
+lists the content scripts' sites as host permissions; Chromium doesn't.)
 
 ## How it works
 
@@ -88,6 +101,9 @@ page.js (page world) ──DOM events──> relay.js (isolated world) ──por
   Web Store) are not detected.
 - Tabs that were open before the extension was installed or updated need a
   reload.
-- Chromium's own single player still exists next to the per-tab ones. The
-  bridge's bus names tell Earful which one to hide (see
+- The browser's own single player still exists next to the per-tab ones.
+  Earful hides it while the bridge is running (see
   [native-host/README.md](../native-host/README.md)).
+- Tabs restored after a restart (or opened in the background) hold their
+  media back until you look at them. They show as paused; pressing play
+  switches to the tab so the browser lets it start.
