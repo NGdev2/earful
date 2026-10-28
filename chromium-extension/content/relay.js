@@ -10,7 +10,8 @@
     const MAX_TEXT = 500;
     const MAX_ART_URL = 2 * 1024 * 1024;
     const STATUSES = ['Playing', 'Paused', 'Stopped'];
-    const FLAGS = ['canPlay', 'canPause', 'canGoNext', 'canGoPrevious', 'canSeek', 'canSetVolume'];
+    const FLAGS = ['canPlay', 'canPause', 'canGoNext', 'canGoPrevious', 'canSeek', 'canSetVolume',
+        'waitingForTab'];
 
     let state = null;
     let port = null;

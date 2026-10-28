@@ -56,7 +56,7 @@
 
     function track(el) {
         if (!elements.has(el)) {
-            elements.set(el, {lastActive: 0, audible: false, wasConnected: false});
+            elements.set(el, {lastActive: 0, audible: false, wasConnected: false, started: false});
             for (const type of MEDIA_EVENTS)
                 el.addEventListener(type, onMediaEvent);
         }
@@ -71,8 +71,19 @@
     }
 
     function onMediaEvent(event) {
+        // Browsers hold back media in tabs restored after a restart (or
+        // opened in the background) until you look at them: such an
+        // element isn't paused, but it doesn't play either. Only the
+        // 'playing' event says it really does.
+        if (event.type === 'playing')
+            elements.get(event.target).started = true;
         check(event.target);
         schedule();
+    }
+
+    /** Not paused, and actually playing rather than waiting for its tab. */
+    function isPlaying(el) {
+        return !el.paused && elements.get(el)?.started === true;
     }
 
     function check(el) {
@@ -169,7 +180,7 @@
 
         let status;
         if (el)
-            status = el.ended ? 'Stopped' : el.paused ? 'Paused' : 'Playing';
+            status = el.ended ? 'Stopped' : isPlaying(el) ? 'Playing' : 'Paused';
         else
             status = sessionState === 'playing' ? 'Playing' : 'Paused';
 
@@ -191,6 +202,8 @@
             canGoPrevious: handlers.has('previoustrack'),
             canSeek: duration > 0 || handlers.has('seekto'),
             canSetVolume: !!el,
+            // Play can't start it from here; the tab has to be shown.
+            waitingForTab: !!el && !el.paused && !isPlaying(el),
         };
     }
 
@@ -219,7 +232,7 @@
         if (value !== undefined && !Number.isFinite(value))
             return;
         const el = activeElement();
-        const playing = el ? !el.paused : navigator.mediaSession?.playbackState === 'playing';
+        const playing = el ? isPlaying(el) : navigator.mediaSession?.playbackState === 'playing';
         switch (command) {
         case 'playpause':
             run({command: playing ? 'pause' : 'play'});

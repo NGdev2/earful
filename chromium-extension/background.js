@@ -85,12 +85,18 @@ function onHostMessage(message) {
         retryDelay = FIRST_RETRY_DELAY;
         break;
     case 'command':
-        if (message.command === 'raise')
+        if (message.command === 'raise' || (waitingForTab(message.tabId) &&
+            ['play', 'playpause'].includes(message.command)))
+            // Media held back until its tab is shown starts once it is.
             raiseTab(message.tabId);
-        else
+        if (message.command !== 'raise')
             sendCommand(message.tabId, message.command, message.value);
         break;
     }
+}
+
+function waitingForTab(tabId) {
+    return sent.get(tabId)?.frame.state?.waitingForTab === true;
 }
 
 function sendCommand(tabId, command, value) {
@@ -133,6 +139,8 @@ function bestFrame(tabId) {
 
 function describe({tabId, frameId, state}) {
     const {hasMetadata, site: frameSite, pageTitle: framePageTitle, ...player} = state;
+    // Only the extension needs to know; the host gets plain player state.
+    delete player.waitingForTab;
     // Media in an embedded frame (a video on a blog) belongs to the tab's page.
     const page = (frameId !== 0 && topPages.get(tabId)) ||
         {site: frameSite, pageTitle: framePageTitle};
