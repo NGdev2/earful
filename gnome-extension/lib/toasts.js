@@ -221,8 +221,9 @@ export class ToastManager {
         });
 
         // Like notification banners: above windows, below modal dialogs,
-        // the on-screen keyboard and the screenshot UI.
-        Main.layoutManager.addChrome(toast, {affectsInputRegion: true});
+        // the on-screen keyboard and the screenshot UI. (Clickable by
+        // default; GNOME 50 rejects the old affectsInputRegion option.)
+        Main.layoutManager.addChrome(toast);
         this._toasts.push(toast);
 
         const max = this._settings.get_int('toast-max-visible');

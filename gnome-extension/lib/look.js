@@ -114,12 +114,13 @@ export function menuStyle(background, look, palette) {
         };
     case 'music': {
         const {start, end} = paletteFor(look, palette);
-        // Deep enough for white text, and cross-fading to the next song.
+        // Deep enough for white text. No cross-fade: St fades through a
+        // square texture that cuts the menu's shadow off at the corners.
         return {
             style: 'background-gradient-direction: vertical; ' +
                 `background-gradient-start: ${rgba(darken(start, 0.2), look.opacity)}; ` +
                 `background-gradient-end: ${rgba(darken(end, 0.4), look.opacity)}; ` +
-                `${border} transition-duration: 600ms;`,
+                border,
             painted: true,
         };
     }
