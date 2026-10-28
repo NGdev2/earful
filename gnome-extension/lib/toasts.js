@@ -75,12 +75,19 @@ class Toast extends St.Button {
         // Cover art often arrives a moment after the title; keep it fresh
         // as long as the same track is shown.
         player.connectObject('changed', () => {
+            if (this.dismissing)
+                return;
             if (player.trackKey === this._trackKey)
                 this._art.setPlayer(player);
             this._restyle();
         }, this);
         this._art.connect('palette-changed', () => this._restyle());
-        this.connect('notify::hover', () => this._restyle());
+        // Leaving the screen also ends the hover; restyling then would
+        // start a fade on a popup that is gone.
+        this.connect('notify::hover', () => {
+            if (this.get_stage())
+                this._restyle();
+        });
         settings.connectObject(
             'changed::design', () => this._restyle(),
             'changed::design-color', () => this._restyle(),
@@ -92,6 +99,10 @@ class Toast extends St.Button {
     }
 
     _restyle() {
+        // A popup fading out is left as it is: changing it would ask for a
+        // new layout of a widget about to be removed.
+        if (this.dismissing)
+            return;
         const look = Look.lookFromSettings(this._settings);
         const palette = this._art.palette;
         this.style = Look.surfaceStyle(look, palette, this.hover);
@@ -254,6 +265,9 @@ export class ToastManager {
             return;
         toast.dismissing = true;
         toast.reactive = false;
+        // Drop the hover now: losing it when the popup is removed would
+        // restyle it on its way out.
+        toast.track_hover = false;
         this._stopTimer(toast);
 
         toast.ease({
@@ -270,7 +284,9 @@ export class ToastManager {
             return;
         this._toasts.splice(index, 1);
         this._stopTimer(toast);
-        Main.layoutManager.removeChrome(toast);
+        // Destroying also drops it from the layout manager. Calling
+        // removeChrome() first would queue one last layout for it, which
+        // GNOME 48 then runs after it is gone.
         toast.destroy();
         // Remaining popups glide into the freed space.
         this._relayout(true);
@@ -315,6 +331,10 @@ export class ToastManager {
                 : workArea.y + workArea.height - offset - height;
             offset += height + spacing;
 
+            // A popup fading out keeps its place (and its slot) until it is
+            // gone; moving it too would animate a widget about to be removed.
+            if (toast.dismissing)
+                continue;
             if (animate && toast.placed) {
                 toast.ease({
                     x, y,

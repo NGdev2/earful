@@ -169,10 +169,12 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-text',
         });
-        this._source = new SourceLine('earful-source');
+        // Compact rows have no source line; every widget made here must end
+        // up in the row, so it is destroyed with it.
+        this._source = style === 'compact' ? null : new SourceLine('earful-source');
         this._title = new St.Label({style_class: 'earful-title'});
         this._artist = new St.Label({style_class: 'earful-artist'});
-        if (style !== 'compact')
+        if (this._source)
             text.add_child(this._source);
         text.add_child(this._title);
         text.add_child(this._artist);
@@ -216,8 +218,9 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             style_class: 'earful-controls',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        if (style !== 'compact')
-            controls.add_child(this._prev);
+        // Compact rows keep it out of sight, but in the row.
+        this._prev.visible = style !== 'compact';
+        controls.add_child(this._prev);
         controls.add_child(this._playPause);
         controls.add_child(this._next);
 
@@ -274,7 +277,12 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             this);
         this._art.connect('palette-changed', () => this._restyle());
         // Painted cards can't use the theme's hover color.
-        this.connect('notify::active', () => this._restyle());
+        // Leaving the screen also ends the hover; restyling then would
+        // start a fade on a widget that is gone.
+        this.connect('notify::active', () => {
+            if (this.get_stage())
+                this._restyle();
+        });
         this._sync();
         this._syncPin();
     }
@@ -291,7 +299,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             this._volume.setSliderStyle(Look.sliderStyle(look, palette));
             this._scene.update(look, palette, this.player.isPlaying);
         }
-        this._source.update(this.player, look.animate, Look.accentColor(look, palette));
+        this._source?.update(this.player, look.animate, Look.accentColor(look, palette));
     }
 
     _syncVolume() {

@@ -1,6 +1,6 @@
 #!/bin/sh
-# Registers the Earful native messaging host with Chromium-based browsers,
-# for the current user only.
+# Registers the Earful native messaging host with Chromium-based browsers
+# and Firefox, for the current user only.
 #
 # Usage: native-host/install.sh [--uninstall]
 
@@ -8,6 +8,9 @@ set -eu
 
 NAME=io.github.ngdev2.earful
 EXTENSION_ID=gjpjaodbgfodpakidffoooacjemeidmn
+FIREFOX_ID=earful@ngdev2.github.io
+# Firefox (also from Snap, through the desktop portal) reads this folder.
+FIREFOX_HOSTS="$HOME/.mozilla/native-messaging-hosts"
 HOST_PATH="$(cd "$(dirname "$0")" && pwd)/earful-host.js"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 
@@ -55,13 +58,34 @@ EOF
     echo "Installed $manifest"
 done
 
+manifest="$FIREFOX_HOSTS/$NAME.json"
+if $uninstall; then
+    if [ -f "$manifest" ]; then
+        rm -f "$manifest"
+        echo "Removed $manifest"
+    fi
+elif [ -d "$HOME/.mozilla" ] || [ -d "$HOME/snap/firefox" ] || command -v firefox >/dev/null; then
+    found=true
+    mkdir -p "$FIREFOX_HOSTS"
+    cat > "$manifest" <<EOF
+{
+  "name": "$NAME",
+  "description": "Earful: one MPRIS player per browser tab",
+  "path": "$HOST_PATH",
+  "type": "stdio",
+  "allowed_extensions": ["$FIREFOX_ID"]
+}
+EOF
+    echo "Installed $manifest"
+fi
+
 if ! $found && ! $uninstall; then
-    echo "No Chromium-based browser profile found in $CONFIG." >&2
-    echo "Start Chromium or Google Chrome once, then run this again." >&2
+    echo "No Chromium-based browser or Firefox found." >&2
+    echo "Start your browser once, then run this again." >&2
     exit 1
 fi
 
 if ! $uninstall; then
     chmod +x "$HOST_PATH"
-    echo "Now load chromium-extension/ in the browser (see chromium-extension/README.md)."
+    echo "Now add the browser extension (see browser-extension/README.md)."
 fi

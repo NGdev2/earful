@@ -55,7 +55,7 @@ cat > "$WORK/scenario.sh" <<'EOF'
 G="gsettings --schemadir $EXT/schemas"
 K=org.gnome.shell.extensions.earful
 gsettings set org.gnome.shell enabled-extensions "$EXTENSIONS"
-env -u DISPLAY gnome-shell --headless --wayland --no-x11 \
+env -u DISPLAY SHELL_DEBUG=backtrace-warnings gnome-shell --headless --wayland --no-x11 \
     --virtual-monitor 1280x800 > "$WORK/shell.log" 2>&1 &
 sleep 6
 gjs -m "$ROOT/tools/fake-player.js" Spotify 2 "$WORK/covers" >/dev/null 2>&1 &
@@ -88,6 +88,7 @@ env "$MARKER" EXT="$EXT" UUID="$UUID" EXTENSIONS="$EXTENSIONS" \
     XDG_DATA_HOME="$WORK/data" XDG_CONFIG_HOME="$WORK/config" XDG_CACHE_HOME="$WORK/cache" \
     timeout 200 dbus-run-session -- bash "$WORK/scenario.sh" 2>/dev/null
 
+[ -n "$SHOTS" ] && cp "$WORK/shell.log" "$SHOTS/shell.log"
 errors=$(grep -E "JS ERROR|JS WARNING|earful" "$WORK/shell.log")
 if [ -n "$errors" ]; then
     echo "FAIL:"; echo "$errors"

@@ -1,7 +1,7 @@
 # Earful native host
 
 A small [gjs](https://gitlab.gnome.org/GNOME/gjs) program that the browser
-starts for the [Earful Bridge extension](../chromium-extension/). It publishes
+starts for the [Earful Bridge extension](../browser-extension/). It publishes
 one [MPRIS](https://specifications.freedesktop.org/mpris-spec/latest/) player
 per browser tab with media, so any MPRIS client (Earful, GNOME's own media
 controls, `playerctl`) sees each tab separately.

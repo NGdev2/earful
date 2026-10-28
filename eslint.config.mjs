@@ -37,12 +37,12 @@ export default [
         rules: {'no-unused-vars': unusedVars, 'no-undef': 'error'},
     },
     {
-        files: ['chromium-extension/**/*.js'],
+        files: ['browser-extension/**/*.js'],
         languageOptions: {ecmaVersion: 2022, sourceType: 'module', globals: browserGlobals},
         rules: {'no-unused-vars': unusedVars, 'no-undef': 'error'},
     },
     {
-        files: ['chromium-extension/content/*.js'],
+        files: ['browser-extension/content/*.js'],
         languageOptions: {sourceType: 'script'},
     },
 ];

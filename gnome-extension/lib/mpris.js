@@ -69,6 +69,10 @@ function makeProxyClasses() {
 const BRIDGE_TAB = /^org\.mpris\.MediaPlayer2\.earful_tab_\d+\.instance(\d+)$/;
 // A browser's own single player, e.g. org.mpris.MediaPlayer2.chromium.instance1234.
 const BROWSER_INSTANCE = /^org\.mpris\.MediaPlayer2\.[^.]+\.instance(\d+)$/;
+// Firefox's own player, e.g. org.mpris.MediaPlayer2.firefox.instance_1_23. A
+// Snap Firefox starts the bridge through the desktop portal, so its pid
+// can't be matched; any bridge tab from Firefox stands in for it.
+const FIREFOX = /^org\.mpris\.MediaPlayer2\.firefox\./;
 
 /** Promise wrapper for an async D-Bus method call. */
 function dbusCall(name, path, iface, method, params, replyType, cancellable) {
@@ -448,6 +452,10 @@ export class PlayerManager extends Signals.EventEmitter {
     isShadowed(player) {
         if (BRIDGE_TAB.test(player.busName))
             return false;
+        if (FIREFOX.test(player.busName)) {
+            return [...this._players.values()].some(p =>
+                p.isBridge && p.identity.endsWith('Firefox'));
+        }
         const pid = BROWSER_INSTANCE.exec(player.busName)?.[1];
         if (!pid)
             return false;

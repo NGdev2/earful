@@ -229,7 +229,7 @@ def run(browser, work):
     process, devtools = start_browser(browser, work)
     try:
         print(f"# {devtools.send('Browser.getVersion')['product']}", flush=True)
-        extension = devtools.send('Extensions.loadUnpacked', {'path': os.path.join(REPO, 'chromium-extension')})
+        extension = devtools.send('Extensions.loadUnpacked', {'path': os.path.join(REPO, 'browser-extension')})
         check(extension.get('id') == EXTENSION_ID, 'extension id matches the manifest key', extension.get('id'))
 
         # Open the tabs one at a time: Chrome holds back media loading in
@@ -297,6 +297,26 @@ def run(browser, work):
 
             devtools.send('Target.closeTarget', {'targetId': tabs['podcast']})
             check(wait_for(lambda: podcast not in bus_names(), 10), 'closing a tab removes its player')
+
+        # A tab opened in the background holds its media back until shown
+        # (like tabs restored after a restart): paused, not playing. Play
+        # brings the tab to the front, which lets it start.
+        before = set(tab_players())
+        held = devtools.send('Target.createTarget',
+                             {'url': f'{base}/music.html?held', 'background': True})['targetId']
+        held_name = wait_for(lambda: next(iter(set(tab_players()) - before), None), 10)
+        check(held_name is not None, 'a background tab with media becomes a player')
+        if held_name:
+            time.sleep(1)
+            check(get(held_name, PLAYER, 'PlaybackStatus') == "(<'Paused'>,)",
+                  'media held back in a background tab shows as Paused',
+                  get(held_name, PLAYER, 'PlaybackStatus'))
+            call(held_name, f'{PLAYER}.Play')
+            check(wait_for(lambda: get(held_name, PLAYER, 'PlaybackStatus') == "(<'Playing'>,)", 10),
+                  'Play brings the tab forward and it starts playing')
+        devtools.send('Target.closeTarget', {'targetId': held})
+        if held_name:
+            wait_for(lambda: held_name not in bus_names(), 10)
 
         # A crashed host is restarted by the extension and gets every tab back.
         survivors = tab_players()

@@ -42,9 +42,10 @@ const browser = {
     pid: parentPid(),
 };
 
-// The browser process that started us. Its own MPRIS player is called
-// org.mpris.MediaPlayer2.chromium.instance<pid>, so including the pid in
-// our names tells clients which browser's player we replace.
+// The browser process that started us. Chromium's own MPRIS player is
+// called org.mpris.MediaPlayer2.chromium.instance<pid>, so including the pid
+// in our names tells clients which browser's player we replace. (Firefox's
+// is org.mpris.MediaPlayer2.firefox.*; clients match it by name instead.)
 function parentPid() {
     try {
         const [, contents] = GLib.file_get_contents('/proc/self/stat');
@@ -53,6 +54,27 @@ function parentPid() {
     } catch {
         return new Gio.Credentials().get_unix_pid();
     }
+}
+
+function readLink(path) {
+    try {
+        return GLib.file_read_link(path);
+    } catch {
+        return '';
+    }
+}
+
+// Firefox's desktop entry depends on how it was installed. A Snap or
+// Flatpak Firefox starts us through the desktop portal, not directly.
+function firefoxDesktopEntry() {
+    const parent = readLink(`/proc/${browser.pid}/exe`);
+    const candidates = parent.includes('/snap/') || parent.endsWith('xdg-desktop-portal')
+        ? ['firefox_firefox', 'org.mozilla.firefox', 'firefox']
+        : ['firefox', 'firefox-esr', 'firefox_firefox', 'org.mozilla.firefox'];
+    const dirs = [...GLib.get_system_data_dirs(), GLib.get_user_data_dir(),
+        '/var/lib/snapd/desktop'];
+    return candidates.find(entry => dirs.some(dir => GLib.file_test(
+        `${dir}/applications/${entry}.desktop`, GLib.FileTest.EXISTS))) ?? 'firefox';
 }
 
 function log(message) {
@@ -110,7 +132,8 @@ function handle(message) {
     switch (message?.type) {
     case 'hello':
         browser.name = text(message.browser?.name, 100) || browser.name;
-        browser.desktopEntry ||= text(message.browser?.desktopEntry, 100);
+        browser.desktopEntry ||= text(message.browser?.desktopEntry, 100) ||
+            (browser.name === 'Firefox' ? firefoxDesktopEntry() : '');
         for (const player of players.values())
             player.publish();
         send({type: 'ready', version: VERSION});

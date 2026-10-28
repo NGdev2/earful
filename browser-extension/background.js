@@ -2,6 +2,9 @@
 // its own MPRIS player through the native messaging host (native-host/).
 // Nothing is sent anywhere else: the host only talks to the local D-Bus.
 
+// Firefox calls the extension API `browser`; Chromium calls it `chrome`.
+const api = globalThis.browser ?? chrome;
+
 const HOST_NAME = 'io.github.ngdev2.earful';
 const FIRST_RETRY_DELAY = 1000;
 const MAX_RETRY_DELAY = 60_000;
@@ -18,6 +21,10 @@ let retryTimer = 0;
 let idleTimer = 0;
 
 function browserInfo() {
+    // The host finds Firefox's desktop entry itself (it differs for Snap,
+    // Flatpak and plain installs).
+    if (navigator.userAgent.includes('Firefox/'))
+        return {name: 'Firefox', desktopEntry: ''};
     const brands = navigator.userAgentData?.brands.map(b => b.brand) ?? [];
     const known = [
         ['Google Chrome', 'google-chrome'],
@@ -35,11 +42,11 @@ function connectHost() {
     clearTimeout(retryTimer);
     retryTimer = 0;
 
-    const port = chrome.runtime.connectNative(HOST_NAME);
+    const port = api.runtime.connectNative(HOST_NAME);
     host = port;
     port.onMessage.addListener(onHostMessage);
     port.onDisconnect.addListener(() => {
-        const error = chrome.runtime.lastError?.message;
+        const error = api.runtime.lastError?.message ?? port.error?.message;
         if (host !== port)
             return;
         host = null;
@@ -52,7 +59,7 @@ function connectHost() {
     port.postMessage({
         type: 'hello',
         browser: browserInfo(),
-        version: chrome.runtime.getManifest().version,
+        version: api.runtime.getManifest().version,
     });
     for (const tabId of activeTabIds())
         refresh(tabId);
@@ -109,8 +116,8 @@ function sendCommand(tabId, command, value) {
 
 async function raiseTab(tabId) {
     try {
-        const tab = await chrome.tabs.update(tabId, {active: true});
-        await chrome.windows.update(tab.windowId, {focused: true});
+        const tab = await api.tabs.update(tabId, {active: true});
+        await api.windows.update(tab.windowId, {focused: true});
     } catch (e) {
         console.warn(`Earful: could not raise tab ${tabId}`, e);
     }
@@ -183,7 +190,7 @@ function refresh(tabId) {
 
 async function fetchTopPage(tabId) {
     try {
-        const info = await chrome.tabs.sendMessage(tabId,
+        const info = await api.tabs.sendMessage(tabId,
             {type: 'earful:page-info'}, {frameId: 0});
         if (typeof info?.site === 'string' && typeof info?.pageTitle === 'string') {
             topPages.set(tabId, {site: info.site, pageTitle: info.pageTitle});
@@ -196,7 +203,7 @@ async function fetchTopPage(tabId) {
 
 // Every frame with media keeps a port open; closing the tab or navigating
 // away closes it, which is how players disappear.
-chrome.runtime.onConnect.addListener(port => {
+api.runtime.onConnect.addListener(port => {
     const tabId = port.sender?.tab?.id;
     if (port.name !== 'earful' || !(tabId >= 0))
         return;

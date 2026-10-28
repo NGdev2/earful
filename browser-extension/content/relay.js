@@ -1,10 +1,12 @@
 // Earful: connects page.js (the page's world) to the service worker.
 //
-// Runs in the extension's isolated world, so it can use chrome.runtime.
+// Runs in the extension's isolated world, so it can use api.runtime.
 // Everything coming from the page is untrusted: only known fields with the
 // right types and sane sizes are passed on.
 
 (() => {
+    // Firefox calls the extension API `browser`; Chromium calls it `chrome`.
+    const api = globalThis.browser ?? chrome;
     const STATE_EVENT = 'earful:state';
     const COMMAND_EVENT = 'earful:command';
     const MAX_TEXT = 500;
@@ -75,7 +77,7 @@
     }
 
     function connect() {
-        const newPort = chrome.runtime.connect({name: 'earful'});
+        const newPort = api.runtime.connect({name: 'earful'});
         newPort.onMessage.addListener(message => {
             if (message?.type !== 'command')
                 return;
@@ -83,7 +85,7 @@
             window.dispatchEvent(new CustomEvent(COMMAND_EVENT, {detail}));
         });
         newPort.onDisconnect.addListener(() => {
-            void chrome.runtime.lastError;
+            void api.runtime.lastError;
             if (port !== newPort)
                 return;
             port = null;
@@ -125,7 +127,7 @@
     });
 
     // Lets media in a frame be labelled with the tab's real site and title.
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message?.type === 'earful:page-info')
             sendResponse(pageInfo());
     });
