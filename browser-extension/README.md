@@ -18,7 +18,7 @@ next / previous, volume, and a click that jumps right to the tab.
      Store, open `chrome://extensions`, turn on **Developer mode**, click
      **Load unpacked** and pick `~/.local/share/earful/browser-extension`
      (or this folder in a checkout). Its ID is then
-     `gjpjaodbgfodpakidffoooacjemeidmn`.
+     `hlomkcgmmialafamfkkpiamgefhlidll`, the same as in the Chrome Web Store.
    - **Firefox 140 or newer:** until it's on Firefox Add-ons, run
      `make firefox`, open `about:debugging#/runtime/this-firefox`, click
      **Load Temporary Add-on** and pick `dist/firefox-extension/manifest.json`.

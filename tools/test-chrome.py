@@ -25,7 +25,7 @@ import time
 import wave
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXTENSION_ID = 'gjpjaodbgfodpakidffoooacjemeidmn'
+EXTENSION_ID = 'hlomkcgmmialafamfkkpiamgefhlidll'
 HOST_NAME = 'io.github.ngdev2.earful'
 ROOT = 'org.mpris.MediaPlayer2'
 PLAYER = 'org.mpris.MediaPlayer2.Player'

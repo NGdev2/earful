@@ -20,10 +20,14 @@ Gio._promisify(Gio.File.prototype, 'delete_async');
 export const HOST_NAME = 'io.github.ngdev2.earful';
 const DESCRIPTION = 'Earful: one media player per browser tab';
 
-// The Earful Bridge add-on: its ID when loaded unpacked (from the "key" in
-// browser-extension/manifest.json) and, once published, in the Chrome Web
-// Store. Brave, Edge, Vivaldi and Opera install from the Chrome Web Store too.
-export const CHROME_EXTENSION_IDS = ['gjpjaodbgfodpakidffoooacjemeidmn'];
+// The Earful Bridge add-on: its Chrome Web Store ID, which is also its ID
+// when loaded unpacked (the "key" in browser-extension/manifest.json is the
+// store's public key), and the development ID used before 0.2.1. Brave,
+// Edge, Vivaldi and Opera install from the Chrome Web Store too.
+export const CHROME_EXTENSION_IDS = [
+    'hlomkcgmmialafamfkkpiamgefhlidll',
+    'gjpjaodbgfodpakidffoooacjemeidmn',
+];
 export const FIREFOX_EXTENSION_ID = 'earful@ngdev2.github.io';
 
 // Chromium-based browsers: config folder (under ~/.config) and programs.

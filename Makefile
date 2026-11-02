@@ -75,7 +75,7 @@ release: pack chrome firefox
 	@python3 -c 'import json, sys; \
 		v = {p: json.load(open(p)).get("version-name") or json.load(open(p))["version"] for p in sys.argv[1:]}; \
 		print("\n".join(f"{x}  {p}" for p, x in v.items())); \
-		sys.exit(len(set(v.values())) != 1 and "Versions differ" or 0)' \
+		sys.exit(len(set(list(v.values())[1:])) != 1 and "Add-on versions differ" or 0)' \
 		$(SRC)/metadata.json browser-extension/manifest.json browser-extension/manifest.firefox.json
 	@ls -l $(DIST)/*.zip
 

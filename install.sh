@@ -14,7 +14,7 @@
 main() {
     set -eu
     UUID=earful@NGdev2.github.io
-    REF=${EARFUL_REF:-v0.2.0}
+    REF=${EARFUL_REF:-v0.2.1}
     REPO_URL=https://github.com/NGdev2/earful
     DATA=${XDG_DATA_HOME:-$HOME/.local/share}
     EXT_DIR=$DATA/gnome-shell/extensions/$UUID

@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "description": "Shows every browser tab that plays media as its own player in the Earful GNOME extension. Nothing leaves your computer.",
   "homepage_url": "https://github.com/NGdev2/earful",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjGVX0lVn/THAASENjVXtidJ/ZPHqsnF5IEFrSnOxLXVwV0gZ5OLPdbZDZhGrnV+8Mn6z1TZ/7oqlmn0jfmomLTtm57s7pup4ioEgQjjPQa9+26P8G6AGlxC9ngliml6qfluGCF33nfhVwnOQeNcZpgOwE5NORB/8cAmZT5cjuZu8R4ZxSJ3LPrhl7sQqVu7R3DeWznb2BLsYfHB/BtL1ZPYQGzazjYPk8xYj6kUOn9Z22pH3htz8ulEYhD219Qq1muV4nrjuaH/D6HWEFkwipiL8YghtlceKEWIMOXmmRANV6iuOz0rXgZ1PyJWdfzthRjeOzvt8gAwIHY6n0lg5zwIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkJ71DgPoctauC7GO1tU2f76L/30s1g6AqS7h1XQLNsDTFpk77hihWDb0w54ghogw4QucWtDrB3yehwcxrKqN4mFkIPssTz2VVL3SMzJbNpCdY+QEsMVYuiSECuBoKlmBF32JtD0UUVB6s5DRN2isBxxeEW93TCJqf5DcIC1fCJSXHPGoZyVJ4685KAbIhNxmpJOZPgYa+Di+RM94Drut9hwFQiT9dHVpM8cOJ8aDJWnFMrG2iMlHvHdyrgbrM6p8u+tiOpI2VyDwFl2ZB0HvsxZ2iU+vCxQCJA5Q9LcCN8FgcDOH3aI/+MrQkq9uI/7DcFgAnzOWWQ9d/BUfiFywmQIDAQAB",
   "minimum_chrome_version": "111",
   "icons": {
     "16": "icons/icon-16.png",
