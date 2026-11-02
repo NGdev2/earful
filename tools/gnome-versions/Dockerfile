@@ -1,5 +1,5 @@
 # A Fedora image with just enough GNOME Shell to run tools/test-shell.sh.
-# Fedora 41, 42, 43 and 44 ship GNOME 47, 48, 49 and 50.
+# Fedora 41, 42, 43, 44 and 45 ship GNOME 47, 48, 49, 50 and 51.
 ARG FEDORA=42
 FROM fedora:${FEDORA}
 

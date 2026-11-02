@@ -5,6 +5,12 @@ import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
+// Constructor properties for a vertical St.BoxLayout. GNOME 48 added
+// `orientation` and GNOME 51 removed the older `vertical`.
+export const VERTICAL = GObject.Object.find_property.call(St.BoxLayout, 'orientation')
+    ? {orientation: Clutter.Orientation.VERTICAL}
+    : {vertical: true};
+
 const BARS = 3;
 // Heights the bars rest at between dances.
 const STILL = [0.55, 1, 0.75];

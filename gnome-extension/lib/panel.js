@@ -15,7 +15,7 @@ import {ensureActorVisibleInScrollView} from 'resource:///org/gnome/shell/misc/a
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
 import {SceneLayer} from './scenes.js';
-import {SourceLine} from './widgets.js';
+import {SourceLine, VERTICAL} from './widgets.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -164,7 +164,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
         this._art = new CoverArt(COVER_SIZES[style], 'earful-art');
 
         const text = new St.BoxLayout({
-            vertical: true,
+            ...VERTICAL,
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-text',
@@ -228,7 +228,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
 
         if (style === 'cards') {
             // Cover and text on top; volume and controls share the row below.
-            const column = new St.BoxLayout({vertical: true, x_expand: true});
+            const column = new St.BoxLayout({...VERTICAL, x_expand: true});
             const top = new St.BoxLayout({style_class: 'earful-card-top'});
             top.add_child(this._art);
             top.add_child(text);
@@ -374,7 +374,7 @@ class AudioAppItem extends PopupMenu.PopupBaseMenuItem {
         this.add_child(this._icon);
 
         const text = new St.BoxLayout({
-            vertical: true,
+            ...VERTICAL,
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-text',

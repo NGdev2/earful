@@ -4,13 +4,13 @@
 # and CPU, run one at a time, and are removed afterwards.
 #
 # Usage: tools/test-gnome-versions.sh [out-dir] [fedora versions...]
-#        default: build/gnome-versions, Fedora 41 42 43 44 (GNOME 47-50)
+#        default: build/gnome-versions, Fedora 41 42 43 44 45 (GNOME 47-51)
 
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$(realpath -m "${1:-$ROOT/build/gnome-versions}")
 shift $(( $# > 0 ? 1 : 0 ))
-if [ $# -gt 0 ]; then VERSIONS=("$@"); else VERSIONS=(41 42 43 44); fi
+if [ $# -gt 0 ]; then VERSIONS=("$@"); else VERSIONS=(41 42 43 44 45); fi
 
 declare -A RESULTS
 for fedora in "${VERSIONS[@]}"; do

@@ -188,8 +188,13 @@ float d = length(max(q, 0.0)) - radius;
 cogl_color_out *= clamp(0.5 - d, 0.0, 1.0);
 `;
 
-const RoundedCorners = GObject.registerClass(
-class RoundedCorners extends Shell.GLSLEffect {
+function cornerRadius(effect, width, height) {
+    return Math.min(effect._radius * scaleFactor(), width / 2, height / 2);
+}
+
+// GNOME 46-50: Shell.GLSLEffect builds the pipeline from snippets.
+const GLSLCorners = Shell.GLSLEffect && GObject.registerClass(
+class GLSLCorners extends Shell.GLSLEffect {
     _init(radius) {
         super._init();
         this._radius = radius;
@@ -205,10 +210,39 @@ class RoundedCorners extends Shell.GLSLEffect {
         const [width, height] = this.actor.get_size();
         this.set_uniform_float(this.get_uniform_location('size'), 2, [width, height]);
         this.set_uniform_float(this.get_uniform_location('radius'), 1,
-            [Math.min(this._radius * scaleFactor(), width / 2, height / 2)]);
+            [cornerRadius(this, width, height)]);
         super.vfunc_paint_target(node, paintContext);
     }
 });
+
+// GNOME 51 removed Shell.GLSLEffect: the same snippet, added to the
+// pipeline the offscreen effect makes (again whenever it makes a new one).
+const PipelineCorners = !GLSLCorners && GObject.registerClass(
+class PipelineCorners extends Clutter.OffscreenEffect {
+    _init(radius) {
+        super._init();
+        this._radius = radius;
+        this._withSnippet = null;
+    }
+
+    vfunc_paint_target(node, paintContext) {
+        const pipeline = this.get_pipeline();
+        if (pipeline) {
+            if (pipeline !== this._withSnippet) {
+                pipeline.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT,
+                    CORNER_DECLARATIONS, CORNER_CODE));
+                this._withSnippet = pipeline;
+            }
+            const [width, height] = this.actor.get_size();
+            pipeline.set_uniform_float(pipeline.get_uniform_location('size'), 2, 1, [width, height]);
+            pipeline.set_uniform_1f(pipeline.get_uniform_location('radius'),
+                cornerRadius(this, width, height));
+        }
+        super.vfunc_paint_target(node, paintContext);
+    }
+});
+
+const RoundedCorners = GLSLCorners || PipelineCorners;
 
 function scaleFactor() {
     return St.ThemeContext.get_for_stage(global.stage).scale_factor;

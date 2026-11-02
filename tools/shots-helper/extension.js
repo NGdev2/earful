@@ -30,7 +30,29 @@ export default class ShotsHelper extends Extension {
         if (!OUT)
             return;
         this._run().catch(e => logError(e, 'earful-shots'))
-            .finally(() => GLib.file_set_contents(`${OUT}/done`, ''));
+            .finally(() => {
+                GLib.file_set_contents(`${OUT}/done`, '');
+                this._prefs().catch(e => logError(e, 'earful-shots'));
+            });
+    }
+
+    /** The settings window, once the test opens it. */
+    async _prefs() {
+        let window = null;
+        for (let i = 0; i < 120 && !window; i++) {
+            await wait(1000);
+            window = global.get_window_actors().map(a => a.meta_window)
+                .find(w => /Shell\.Extensions/i.test(w.get_wm_class() ?? ''));
+        }
+        if (!window)
+            return;
+        await wait(2500);
+        // The test shell starts in the overview, which covers the window.
+        Main.overview.hide();
+        await wait(1000);
+        window.activate(global.get_current_time());
+        await wait(800);
+        await shot('prefs');
     }
 
     async _run() {

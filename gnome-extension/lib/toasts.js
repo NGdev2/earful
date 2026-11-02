@@ -12,7 +12,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
 import {SceneLayer} from './scenes.js';
-import {SourceLine} from './widgets.js';
+import {SourceLine, VERTICAL} from './widgets.js';
 
 const WIDTH = 380;
 const COVER_SIZE = 72;
@@ -50,7 +50,7 @@ class Toast extends St.Button {
         box.add_child(this._art);
 
         const text = new St.BoxLayout({
-            vertical: true,
+            ...VERTICAL,
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-toast-text',
