@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Smoke test: runs Earful in an invisible, isolated GNOME Shell with fake
-# players, exercises settings and disable/enable, then reports JS errors.
+# players, exercises settings, the browser-tabs registration, the settings
+# window and disable/enable, then reports JS errors.
 #
-# Your real session is untouched: private D-Bus, throwaway settings and
-# data dirs, no input method daemon, and every process it started is
-# killed afterwards (even ones that detached).
+# Your real session is untouched: private D-Bus, throwaway home, settings
+# and data dirs, its own Wayland display, no input method daemon, and every
+# process it started is killed afterwards (even ones that detached).
 #
 # Usage: tools/test-shell.sh [seconds-per-scenario-step]   (default 3)
 #        SHOTS=<dir> tools/test-shell.sh   also saves screenshots of the
 #                                          menu in every style and of popups
+#        KEEP_LOGS=<dir> tools/test-shell.sh   keeps the shell and bus logs
 
 set -u
 STEP=${1:-3}
@@ -17,6 +19,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 UUID=earful@NGdev2.github.io
 WORK=$(mktemp -d -t earful-test-XXXXXX)
 MARKER="EARFUL_TEST_SESSION=$WORK"
+WL="wl-test-${WORK##*-}"
 
 cleanup() {
     # Kill everything that carries our marker in its environment.
@@ -27,12 +30,18 @@ cleanup() {
         fi
     done
     rm -rf "$WORK"
+    rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$WL" "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$WL.lock"
 }
 trap cleanup EXIT INT TERM
 
 make -s -C "$ROOT" pack >/dev/null || exit 1
 EXT="$WORK/data/gnome-shell/extensions/$UUID"
 mkdir -p "$EXT" "$WORK/config" "$WORK/cache" "$WORK/bin"
+. "$ROOT/tools/mask-services.sh"
+mask_services "$WORK/data"
+# A fake home with Chrome and Firefox, for the browser-tabs registration.
+# (Desktop: Ubuntu's desktop icons extension expects one.)
+mkdir -p "$WORK/home/.mozilla/firefox" "$WORK/config/google-chrome" "$WORK/home/Desktop"
 unzip -q "$ROOT/dist/$UUID.shell-extension.zip" -d "$EXT"
 glib-compile-schemas "$EXT/schemas"
 mkdir -p "$WORK/covers"
@@ -55,9 +64,32 @@ cat > "$WORK/scenario.sh" <<'EOF'
 G="gsettings --schemadir $EXT/schemas"
 K=org.gnome.shell.extensions.earful
 gsettings set org.gnome.shell enabled-extensions "$EXTENSIONS"
-env -u DISPLAY SHELL_DEBUG=backtrace-warnings gnome-shell --headless --wayland --no-x11 \
-    --virtual-monitor 1280x800 > "$WORK/shell.log" 2>&1 &
+SHELL_DEBUG=backtrace-warnings gnome-shell --headless --wayland --no-x11 \
+    --wayland-display="$WAYLAND_DISPLAY" --virtual-monitor 1280x800 > "$WORK/shell.log" 2>&1 &
 sleep 6
+
+# Browser tabs: Earful registers its helper with the (fake) browsers.
+check() { if eval "$1"; then echo "ok - $2"; else echo "FAIL - $2"; fi >> "$WORK/checks.log"; }
+M=io.github.ngdev2.earful.json
+CHROME="$XDG_CONFIG_HOME/google-chrome/NativeMessagingHosts/$M"
+FIREFOX="$HOME/.mozilla/native-messaging-hosts/$M"
+check '[ -f "$CHROME" ] && grep -q "\"path\": \"$EXT/bridge/earful-host.js\"" "$CHROME"' "Chrome registered at login"
+check 'grep -q allowed_extensions "$FIREFOX"' "Firefox registered at login"
+check '[ -x "$EXT/bridge/earful-host.js" ]' "helper is executable"
+$G set $K browser-bridge false; sleep 1
+check '[ ! -e "$CHROME" ] && [ ! -e "$FIREFOX" ]' "switch off removes the registration"
+$G set $K browser-bridge true; sleep 1
+check '[ -f "$CHROME" ] && [ -f "$FIREFOX" ]' "switch on registers again"
+
+# The settings window opens on the test display without errors.
+gnome-extensions prefs "$UUID"
+prefs_up() {
+    gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.NameHasOwner org.gnome.Shell.Extensions | grep -q true
+}
+for _ in $(seq 15); do prefs_up && break; sleep 1; done
+sleep 3
+check prefs_up "settings window running"
 gjs -m "$ROOT/tools/fake-player.js" Spotify 2 "$WORK/covers" >/dev/null 2>&1 &
 gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2>&1 &
 P2=$!
@@ -82,14 +114,21 @@ echo "after enable:  $(gnome-extensions info "$UUID" | grep -o 'State: .*')"
 $G reset-recursively $K
 EOF
 
-env "$MARKER" EXT="$EXT" UUID="$UUID" EXTENSIONS="$EXTENSIONS" \
+# Everything started on the private bus (including the settings window)
+# inherits this environment, so it can only reach the test display.
+env -u DISPLAY "$MARKER" EXT="$EXT" UUID="$UUID" EXTENSIONS="$EXTENSIONS" \
     SHOTS="$SHOTS" EARFUL_SHOTS="$SHOTS" ROOT="$ROOT" WORK="$WORK" STEP="$STEP" \
-    PATH="$WORK/bin:$PATH" \
+    PATH="$WORK/bin:$PATH" HOME="$WORK/home" WAYLAND_DISPLAY="$WL" GDK_BACKEND=wayland \
     XDG_DATA_HOME="$WORK/data" XDG_CONFIG_HOME="$WORK/config" XDG_CACHE_HOME="$WORK/cache" \
-    timeout 200 dbus-run-session -- bash "$WORK/scenario.sh" 2>/dev/null
+    timeout 200 dbus-run-session -- bash "$WORK/scenario.sh" 2>"$WORK/bus.log"
 
-[ -n "$SHOTS" ] && cp "$WORK/shell.log" "$SHOTS/shell.log"
-errors=$(grep -E "JS ERROR|JS WARNING|earful" "$WORK/shell.log")
+[ -n "$SHOTS" ] && cp "$WORK/shell.log" "$WORK/bus.log" "$SHOTS/"
+[ -n "${KEEP_LOGS:-}" ] && mkdir -p "$KEEP_LOGS" && cp "$WORK/shell.log" "$WORK/bus.log" "$KEEP_LOGS/"
+cat "$WORK/checks.log" 2>/dev/null
+errors=$(grep -E "JS ERROR|JS WARNING|earful" "$WORK/shell.log"
+         grep -E "JS ERROR|JS WARNING|CRITICAL" "$WORK/bus.log"
+         grep FAIL "$WORK/checks.log" 2>/dev/null
+         [ -s "$WORK/checks.log" ] || echo "no checks ran")
 if [ -n "$errors" ]; then
     echo "FAIL:"; echo "$errors"
     exit 1

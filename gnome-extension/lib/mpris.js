@@ -65,7 +65,7 @@ function makeProxyClasses() {
     MprisPlayerProxy ??= Gio.DBusProxy.makeProxyWrapper(MprisPlayerIface);
 }
 
-// Players published by our browser bridge, one per tab (see native-host/).
+// Players published by our browser bridge, one per tab (see ../bridge/).
 const BRIDGE_TAB = /^org\.mpris\.MediaPlayer2\.earful_tab_\d+\.instance(\d+)$/;
 // A browser's own single player, e.g. org.mpris.MediaPlayer2.chromium.instance1234.
 const BROWSER_INSTANCE = /^org\.mpris\.MediaPlayer2\.[^.]+\.instance(\d+)$/;

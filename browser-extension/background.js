@@ -1,5 +1,6 @@
 // Earful: keeps track of every tab that plays media and mirrors each one as
-// its own MPRIS player through the native messaging host (native-host/).
+// its own MPRIS player through the native messaging host
+// (gnome-extension/bridge/, registered by Earful itself).
 // Nothing is sent anywhere else: the host only talks to the local D-Bus.
 
 // Firefox calls the extension API `browser`; Chromium calls it `chrome`.
@@ -19,6 +20,15 @@ let host = null;
 let retryDelay = FIRST_RETRY_DELAY;
 let retryTimer = 0;
 let idleTimer = 0;
+// When the host isn't installed, don't retry on a timer: try again when
+// media plays, at most once a minute.
+let nextAttempt = 0;
+
+// Chrome: "Specified native messaging host not found."
+// Firefox: "No such native application io.github.ngdev2.earful".
+function hostMissing(error) {
+    return /not found|no such native application/i.test(error ?? '');
+}
 
 function browserInfo() {
     // The host finds Firefox's desktop entry itself (it differs for Snap,
@@ -52,7 +62,9 @@ function connectHost() {
         host = null;
         sent.clear();
         console.warn(`Earful: native host disconnected${error ? `: ${error}` : ''}`);
-        if (activeTabIds().size)
+        if (hostMissing(error))
+            nextAttempt = Date.now() + MAX_RETRY_DELAY;
+        else if (activeTabIds().size)
             scheduleReconnect();
     });
 
@@ -90,6 +102,7 @@ function onHostMessage(message) {
     switch (message?.type) {
     case 'ready':
         retryDelay = FIRST_RETRY_DELAY;
+        nextAttempt = 0;
         break;
     case 'command':
         if (message.command === 'raise' || (waitingForTab(message.tabId) &&
@@ -171,7 +184,7 @@ function refresh(tabId) {
 
     if (!host) {
         // connectHost() refreshes every tab once connected.
-        if (!retryTimer)
+        if (!retryTimer && Date.now() >= nextAttempt)
             connectHost();
         return;
     }
@@ -224,4 +237,23 @@ api.runtime.onConnect.addListener(port => {
         frames.delete(frame);
         refresh(tabId);
     });
+});
+
+// Right after the add-on is installed, check that Earful's helper answers.
+// If Earful isn't installed yet, say so and show how to get it. (Snap
+// Firefox asks here, once, whether it may start the helper.)
+api.runtime.onInstalled.addListener(({reason}) => {
+    if (reason !== 'install')
+        return;
+    const port = api.runtime.connectNative(HOST_NAME);
+    port.onMessage.addListener(message => {
+        if (message?.type === 'ready')
+            port.disconnect();
+    });
+    port.onDisconnect.addListener(() => {
+        const error = api.runtime.lastError?.message ?? port.error?.message;
+        if (hostMissing(error))
+            api.tabs.create({url: api.runtime.getURL('welcome.html')});
+    });
+    port.postMessage({type: 'hello', browser: browserInfo(), version: api.runtime.getManifest().version});
 });

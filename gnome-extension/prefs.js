@@ -6,6 +6,15 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+import * as BridgeSetup from './lib/bridgeSetup.js';
+
+// Where to get the Earful Bridge add-on. The store pages replace these once
+// the add-on is listed there.
+const ADDON_PAGES = {
+    chrome: 'https://github.com/NGdev2/earful#browser-tabs-as-separate-players-optional',
+    firefox: 'https://github.com/NGdev2/earful#browser-tabs-as-separate-players-optional',
+};
+
 const POSITIONS = [
     ['top-left', () => _('Top left')],
     ['top-center', () => _('Top center')],
@@ -121,6 +130,32 @@ async function runningPlayers() {
             }
         }));
     return players;
+}
+
+// Snap Firefox starts native helpers through the desktop portal, which
+// remembers the answer to "Allow Firefox to start Earful?".
+const PERMISSIONS = ['org.freedesktop.impl.portal.PermissionStore',
+    '/org/freedesktop/impl/portal/PermissionStore',
+    'org.freedesktop.impl.portal.PermissionStore'];
+
+/** 'yes', 'no' or null (never asked) for Snap Firefox. */
+async function firefoxPermission() {
+    try {
+        const reply = await Gio.DBus.session.call(...PERMISSIONS, 'Lookup',
+            new GLib.Variant('(ss)', ['webextensions', BridgeSetup.HOST_NAME]),
+            null, Gio.DBusCallFlags.NONE, DBUS_TIMEOUT_MS, null);
+        const [permissions] = reply.deepUnpack();
+        return permissions['snap.firefox']?.[0] ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/** Forgets a "no", so the portal asks the user again next time. */
+async function forgetFirefoxPermission() {
+    await Gio.DBus.session.call(...PERMISSIONS, 'DeletePermission',
+        new GLib.Variant('(sss)', ['webextensions', BridgeSetup.HOST_NAME, 'snap.firefox']),
+        null, Gio.DBusCallFlags.NONE, DBUS_TIMEOUT_MS, null);
 }
 
 /**
@@ -250,6 +285,43 @@ export default class EarfulPreferences extends ExtensionPreferences {
             _('Show other apps playing sound'),
             _('Games, calls and other apps that are not players, each with a volume slider.')));
 
+        // Browser tabs
+        const tabs = new Adw.PreferencesGroup({
+            title: _('Browser tabs'),
+            description: _('Each browser tab that plays gets its own row in the menu. Needs the free Earful Bridge add-on in your browser.'),
+        });
+        page.add(tabs);
+        tabs.add(switchRow(settings, 'browser-bridge', _('Show each tab as its own player'),
+            _('Lets the add-on start Earful\'s small helper program.')));
+        const getAddon = new Adw.ActionRow({title: _('Get the add-on')});
+        for (const [label, uri] of [[_('Chrome, Brave, Edge'), ADDON_PAGES.chrome],
+            [_('Firefox'), ADDON_PAGES.firefox]]) {
+            const button = new Gtk.Button({label, valign: Gtk.Align.CENTER});
+            button.connect('clicked', () => new Gtk.UriLauncher({uri}).launch(window, null, null));
+            getAddon.add_suffix(button);
+        }
+        tabs.add(getAddon);
+        this._browserRows = [];
+        const refresh = () => this._fillBrowsers(settings, tabs).catch(e =>
+            logError(e, 'Earful: could not check browser tabs'));
+        refresh();
+        // The shell (re)registers when the switch changes; show the result.
+        let refreshId = 0;
+        const bridgeId = settings.connect('changed::browser-bridge', () => {
+            if (refreshId)
+                GLib.source_remove(refreshId);
+            refreshId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+                refreshId = 0;
+                refresh();
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+        window.connect('close-request', () => {
+            settings.disconnect(bridgeId);
+            if (refreshId)
+                GLib.source_remove(refreshId);
+        });
+
         // Playback
         const playback = new Adw.PreferencesGroup({title: _('Playback')});
         page.add(playback);
@@ -277,6 +349,60 @@ export default class EarfulPreferences extends ExtensionPreferences {
 
         this._fillPlayers(settings, keep, apps).catch(e =>
             logError(e, 'Earful: could not list players'));
+    }
+
+    // One row per browser found, saying whether the helper is set up, plus a
+    // way back for Snap Firefox when its permission was once denied.
+    async _fillBrowsers(settings, group) {
+        // Only the latest refresh may change the rows.
+        const turn = this._browserTurn = (this._browserTurn ?? 0) + 1;
+        const paths = BridgeSetup.defaultPaths(
+            GLib.build_filenamev([this.path, 'bridge', 'earful-host.js']));
+        const enabled = settings.get_boolean('browser-bridge');
+        // A browser installed since login gets set up right away.
+        if (enabled)
+            await BridgeSetup.register(paths);
+        const found = await BridgeSetup.status(paths);
+        const blocked = paths.snapFirefox && await firefoxPermission() === 'no';
+        if (turn !== this._browserTurn)
+            return;
+
+        for (const row of this._browserRows)
+            group.remove(row);
+        this._browserRows = [];
+        const add = row => {
+            group.add(row);
+            this._browserRows.push(row);
+        };
+
+        const byName = new Map();
+        for (const browser of found)
+            byName.set(browser.name, (byName.get(browser.name) ?? false) || browser.registered);
+        if (byName.size === 0)
+            add(new Adw.ActionRow({title: _('No supported browser found')}));
+        for (const [name, registered] of byName) {
+            let subtitle = enabled ? _('Ready. Add the add-on to this browser.') : _('Off');
+            if (enabled && !registered)
+                subtitle = _('Could not set up. Restart your computer to try again.');
+            if (name === 'Firefox' && enabled && blocked)
+                subtitle = _('Firefox is not allowed to start Earful\'s helper.');
+            const row = new Adw.ActionRow({title: GLib.markup_escape_text(name, -1), subtitle});
+            if (name === 'Firefox' && enabled && blocked) {
+                const again = new Gtk.Button({label: _('Ask again'), valign: Gtk.Align.CENTER});
+                again.connect('clicked', async () => {
+                    again.sensitive = false;
+                    try {
+                        await forgetFirefoxPermission();
+                        row.subtitle = _('Firefox will ask once more. Choose Allow.');
+                    } catch (e) {
+                        logError(e, 'Earful: could not reset the Firefox permission');
+                        again.sensitive = true;
+                    }
+                });
+                row.add_suffix(again);
+            }
+            add(row);
+        }
     }
 
     async _fillPlayers(settings, keep, apps) {

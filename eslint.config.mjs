@@ -1,4 +1,4 @@
-// Lint config: GJS code (GNOME extension, native host, tools) and the
+// Lint config: GJS code (GNOME extension with its native host, tools) and the
 // Chromium extension (browser globals, content scripts are classic scripts).
 
 const unusedVars = ['error', {argsIgnorePattern: '^_|^[a-z]$|^(proxy|sender|menu|item|m)$'}];
@@ -32,7 +32,7 @@ const browserGlobals = {
 
 export default [
     {
-        files: ['gnome-extension/**/*.js', 'native-host/**/*.js', 'tools/**/*.js'],
+        files: ['gnome-extension/**/*.js', 'tools/**/*.js'],
         languageOptions: {ecmaVersion: 2022, sourceType: 'module', globals: gjsGlobals},
         rules: {'no-unused-vars': unusedVars, 'no-undef': 'error'},
     },

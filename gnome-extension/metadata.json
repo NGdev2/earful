@@ -1,10 +1,10 @@
 {
   "uuid": "earful@NGdev2.github.io",
   "name": "Earful",
-  "description": "Every player, one click away. See and control everything that plays — apps and browser tabs — from one top bar button, and get a gentle \"now playing\" popup when a track changes.",
+  "description": "Every player, one click away. One top bar button for everything that plays, apps and browser tabs: pause, skip or change the volume without switching windows, and see each new song in a small popup at a glance.",
   "shell-version": ["46", "47", "48", "49", "50", "51"],
   "url": "https://github.com/NGdev2/earful",
   "settings-schema": "org.gnome.shell.extensions.earful",
   "gettext-domain": "earful",
-  "version-name": "0.1.0"
+  "version-name": "0.2.0"
 }

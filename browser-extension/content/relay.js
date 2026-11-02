@@ -120,7 +120,15 @@
         send();
     });
 
-    // Back from the back/forward cache: the old connection was closed.
+    // Leaving the page removes its player. Chrome closes the connection by
+    // itself; Firefox keeps it open while the page sits in the back/forward
+    // cache, so close it here.
+    window.addEventListener('pagehide', () => {
+        port?.disconnect();
+        port = null;
+    });
+
+    // Back from the back/forward cache: connect again.
     window.addEventListener('pageshow', event => {
         if (event.persisted && state)
             send();

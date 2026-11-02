@@ -2,10 +2,11 @@
 // Earful native messaging host: turns the media tabs reported by the
 // Earful browser extension into one MPRIS player each.
 //
-// The browser starts it (see install.sh) with stdin/stdout as the native
-// messaging pipe: every message is a 4-byte native-endian length followed
-// by that many bytes of UTF-8 JSON. So nothing here may print to stdout;
-// diagnostics go to stderr, which the browser shows in its own log.
+// The browser starts it (Earful registers it, see ../lib/bridgeSetup.js)
+// with stdin/stdout as the native messaging pipe: every message is a 4-byte
+// native-endian length followed by that many bytes of UTF-8 JSON. So nothing
+// here may print to stdout; diagnostics go to stderr, which the browser shows
+// in its own log.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -17,7 +18,16 @@ import {TabPlayer} from './lib/tab-player.js';
 const GioUnix = await import('gi://GioUnix').then(m => m.default, () => null);
 const GLibUnix = await import('gi://GLibUnix').then(m => m.default, () => null);
 
-const VERSION = '0.1.0';
+// The extension's version-name, from metadata.json one folder up.
+const VERSION = (() => {
+    try {
+        const here = GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]);
+        const [, bytes] = GLib.file_get_contents(GLib.build_filenamev([here, '..', 'metadata.json']));
+        return JSON.parse(new TextDecoder().decode(bytes))['version-name'] ?? 'unknown';
+    } catch {
+        return 'unknown';
+    }
+})();
 const MAX_MESSAGE_SIZE = 64 * 1024 * 1024;
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 const SIGNALS = {SIGHUP: 1, SIGINT: 2, SIGTERM: 15};
@@ -134,6 +144,12 @@ function handle(message) {
         browser.name = text(message.browser?.name, 100) || browser.name;
         browser.desktopEntry ||= text(message.browser?.desktopEntry, 100) ||
             (browser.name === 'Firefox' ? firefoxDesktopEntry() : '');
+        // Snap Firefox starts us through the desktop portal, so the parent
+        // pid is the portal's, the same for every Firefox running; our own
+        // pid keeps the names apart. (Clients find Firefox's own player by
+        // its name, not by pid.)
+        if (browser.name === 'Firefox')
+            browser.pid = new Gio.Credentials().get_unix_pid();
         for (const player of players.values())
             player.publish();
         send({type: 'ready', version: VERSION});

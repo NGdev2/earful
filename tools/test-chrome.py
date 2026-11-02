@@ -2,7 +2,7 @@
 """End-to-end test: a real headless Chromium / Google Chrome, the Earful
 extension and the native host, all on a private D-Bus session.
 
-Usage: python3 native-host/test-browser.py [browser]   (or: make bridge-test-browser)
+Usage: python3 tools/test-chrome.py [browser]   (or: make bridge-test-browser)
 
 Everything lives in a temporary folder that is deleted afterwards: browser
 profile, HOME, XDG dirs, the host manifest and a tiny local web site. Your
@@ -186,7 +186,7 @@ def make_site(root):
     return f'http://127.0.0.1:{server.server_address[1]}'
 
 
-def start_browser(browser, work):
+def start_browser(browser, work, register_host=True):
     profile = os.path.join(work, 'profile')
     home = os.path.join(work, 'home')
     runtime = os.path.join(work, 'runtime')
@@ -196,10 +196,11 @@ def start_browser(browser, work):
     # Browsers also read per-user host manifests from <user-data-dir>/NativeMessagingHosts.
     hosts = os.path.join(profile, 'NativeMessagingHosts')
     os.makedirs(hosts)
-    with open(os.path.join(hosts, f'{HOST_NAME}.json'), 'w') as f:
-        json.dump({'name': HOST_NAME, 'description': 'Earful test', 'type': 'stdio',
-                   'path': os.path.join(REPO, 'native-host', 'earful-host.js'),
-                   'allowed_origins': [f'chrome-extension://{EXTENSION_ID}/']}, f)
+    if register_host:
+        with open(os.path.join(hosts, f'{HOST_NAME}.json'), 'w') as f:
+            json.dump({'name': HOST_NAME, 'description': 'Earful test', 'type': 'stdio',
+                       'path': os.path.join(REPO, 'gnome-extension', 'bridge', 'earful-host.js'),
+                       'allowed_origins': [f'chrome-extension://{EXTENSION_ID}/']}, f)
 
     to_browser_r, to_browser_w = os.pipe()
     from_browser_r, from_browser_w = os.pipe()
@@ -207,6 +208,9 @@ def start_browser(browser, work):
     def devtools_fds():
         os.dup2(to_browser_r, 3)
         os.dup2(from_browser_w, 4)
+        # dup2 onto the same number keeps close-on-exec; clear it.
+        os.set_inheritable(3, True)
+        os.set_inheritable(4, True)
 
     env = dict(os.environ, HOME=home, XDG_CONFIG_HOME=os.path.join(home, '.config'),
                XDG_CACHE_HOME=os.path.join(home, '.cache'), XDG_RUNTIME_DIR=runtime, GIO_USE_VFS='local')
@@ -231,6 +235,8 @@ def run(browser, work):
         print(f"# {devtools.send('Browser.getVersion')['product']}", flush=True)
         extension = devtools.send('Extensions.loadUnpacked', {'path': os.path.join(REPO, 'browser-extension')})
         check(extension.get('id') == EXTENSION_ID, 'extension id matches the manifest key', extension.get('id'))
+        time.sleep(2)
+        check(not welcome_open(devtools), 'no welcome page when the helper answers')
 
         # Open the tabs one at a time: Chrome holds back media loading in
         # background tabs that were never shown.
@@ -339,8 +345,34 @@ def run(browser, work):
             process.kill()
 
 
+def welcome_open(devtools):
+    targets = devtools.send('Target.getTargets')['targetInfos']
+    return any(t.get('url', '').endswith('/welcome.html') for t in targets)
+
+
+# Without Earful's helper the add-on opens its welcome page once.
+def run_without_host(browser, work):
+    process, devtools = start_browser(browser, work, register_host=False)
+    try:
+        devtools.send('Browser.getVersion')
+        devtools.send('Extensions.loadUnpacked', {'path': os.path.join(REPO, 'browser-extension')})
+        check(wait_for(lambda: welcome_open(devtools), 10), 'welcome page opens when Earful is missing')
+        try:
+            devtools.send('Browser.close')
+        except RuntimeError:
+            pass
+        process.wait(15)
+    except (BrokenPipeError, RuntimeError) as e:
+        check(False, 'browser without the helper ran',
+              f"{e!r} {open(os.path.join(work, 'browser.log')).read()[-1500:]}")
+    finally:
+        if process.poll() is None:
+            process.kill()
+
+
 def main():
     if len(sys.argv) > 2 and sys.argv[2] == '--on-private-bus':
+        run_without_host(sys.argv[1], os.path.join(sys.argv[3], 'nohost'))
         run(sys.argv[1], sys.argv[3])
         print(f'\n{failures} check(s) failed' if failures else '\nAll checks passed')
         sys.exit(1 if failures else 0)

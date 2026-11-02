@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Earful Bridge: one more step</title>
+<link rel="icon" href="icons/icon-32.png">
+<link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+<main>
+  <header>
+    <img src="icons/icon-128.png" alt="" width="64" height="64">
+    <div>
+      <h1>One more step: install Earful</h1>
+      <p class="lead">Earful Bridge shows every browser tab that plays music or video as its own player in Earful, a media menu in the GNOME top bar. Earful isn't on this computer yet.</p>
+    </div>
+  </header>
+
+  <section>
+    <h2>1. Install Earful</h2>
+    <p>Open a terminal and run:</p>
+    <div class="command">
+      <code id="command">curl -fsSL https://raw.githubusercontent.com/NGdev2/earful/main/install.sh | sh</code>
+      <button id="copy" type="button">Copy</button>
+    </div>
+    <p class="note">No sudo needed. Earful works on Linux with GNOME 46 or newer.</p>
+  </section>
+
+  <section>
+    <h2>2. Restart your computer</h2>
+    <p>Then play something in a tab: it shows up in Earful's menu with its own play, pause and volume.</p>
+  </section>
+
+  <section class="help">
+    <h2>Already installed?</h2>
+    <ul>
+      <li>In Earful's settings, make sure <strong>Browser tabs</strong> is on.</li>
+      <li>Firefox from Snap asks once whether it may start Earful. Choose <strong>Allow</strong>. If you chose otherwise, click <strong>Ask again</strong> in Earful's settings.</li>
+      <li>Browsers installed as Flatpak or the Snap version of Chromium can't start Earful's helper.</li>
+    </ul>
+    <p><a href="https://github.com/NGdev2/earful">Earful on GitHub</a>: instructions, questions and bug reports.</p>
+  </section>
+</main>
+<script src="welcome.js"></script>
+</body>
+</html>

@@ -2,13 +2,13 @@
   "manifest_version": 3,
   "name": "Earful Bridge",
   "short_name": "Earful",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shows every browser tab that plays media as its own player in the Earful GNOME extension. Nothing leaves your computer.",
   "homepage_url": "https://github.com/NGdev2/earful",
   "browser_specific_settings": {
     "gecko": {
       "id": "earful@ngdev2.github.io",
-      "strict_min_version": "128.0",
+      "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": ["none"]
       }

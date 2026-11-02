@@ -5,14 +5,14 @@
 // throwaway XDG_RUNTIME_DIR, plays the extension's side of the native
 // messaging pipe for a few fake tabs, and checks the result over D-Bus.
 //
-// Usage: gjs -m native-host/test-host.js   (or: make bridge-test)
+// Usage: gjs -m tools/test-host.js   (or: make bridge-test)
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {exit, programArgs} from 'system';
 
 const SELF = GLib.filename_from_uri(import.meta.url)[0];
-const HOST = GLib.build_filenamev([GLib.path_get_dirname(SELF), 'earful-host.js']);
+const HOST = GLib.build_filenamev([GLib.path_get_dirname(SELF), '..', 'gnome-extension', 'bridge', 'earful-host.js']);
 const PRIVATE_FLAG = '--on-private-bus';
 
 if (!programArgs.includes(PRIVATE_FLAG)) {

@@ -1,42 +1,37 @@
-# Earful Bridge for Chrome, Chromium, Brave, Edge and Firefox
+# Earful Bridge for Chrome, Brave, Edge, Vivaldi, Opera and Firefox
 
 Browsers show only **one** media player to the desktop: whichever tab played
 last. With three YouTube tabs open, two of them are invisible to GNOME.
 
-This extension, together with the small [native host](../native-host/), gives
-**every tab that plays media its own player**, so Earful can list and control
-each one: title, artist, cover, play / pause, next / previous, volume, and a
-click that jumps right to the tab.
+This add-on, together with a small helper program that comes with
+[Earful](../README.md), gives **every tab that plays media its own player**, so
+Earful can list and control each one: title, artist, cover, play / pause,
+next / previous, volume, and a click that jumps right to the tab.
 
 ## Install
 
-1. From the repository root, register the native host for every browser
-   you have:
-
-   ```bash
-   make bridge-install      # make bridge-uninstall to undo
-   ```
-
-2. Add the extension:
-   - **Chrome, Chromium, Brave, Edge:** open `chrome://extensions`, turn on
-     **Developer mode**, click **Load unpacked** and pick this
-     `browser-extension` folder. The extension ID is always
+1. Install Earful (see the [main README](../README.md#install)). Earful
+   registers its helper with every browser it finds, by itself. (Turn this
+   off or on in Earful's settings, under *Browser tabs*.)
+2. Add the add-on:
+   - **Chrome, Brave, Edge, Vivaldi, Opera:** until it's in the Chrome Web
+     Store, open `chrome://extensions`, turn on **Developer mode**, click
+     **Load unpacked** and pick `~/.local/share/earful/browser-extension`
+     (or this folder in a checkout). Its ID is then
      `gjpjaodbgfodpakidffoooacjemeidmn`.
-   - **Firefox 128 or newer:** run `make firefox`, open
-     `about:debugging#/runtime/this-firefox`, click
+   - **Firefox 140 or newer:** until it's on Firefox Add-ons, run
+     `make firefox`, open `about:debugging#/runtime/this-firefox`, click
      **Load Temporary Add-on** and pick `dist/firefox-extension/manifest.json`.
-     A temporary add-on is gone after Firefox restarts, until the signed
-     version is on Firefox Add-ons. The add-on ID is
+     A temporary add-on is gone after Firefox restarts. The add-on ID is
      `earful@ngdev2.github.io`.
-3. Reload tabs that were already open, or just start something new. If the
-   extension was loaded before the host was installed, reload it once so it
-   connects right away.
+3. Reload tabs that were already open, or just start something new.
 
-Needs `gjs`, which every GNOME desktop already has.
+If Earful isn't installed, the add-on opens a short page saying how to get it.
 
-Firefox from Snap (Ubuntu's default) reaches the host through the desktop
-portal; the first time, your desktop may ask whether Firefox may start it.
-Firefox from Flatpak can't start programs outside its sandbox yet.
+Firefox from Snap (Ubuntu's default) reaches the helper through the desktop
+portal; the first time, your desktop asks whether Firefox may start it. If you
+once chose not to allow it, click **Ask again** in Earful's settings. Browsers
+from Flatpak and Chromium from Snap can't start programs outside their sandbox.
 
 ## Privacy
 
@@ -85,7 +80,9 @@ page.js (page world) ──DOM events──> relay.js (isolated world) ──por
   playing first, then most recent), starts the native host when there is
   something to show, restarts it with backoff if it dies, and lets it sleep
   after a minute without media. Closing a tab or leaving the page closes its
-  port, which removes the player.
+  port, which removes the player. If the host isn't installed it doesn't
+  retry on a timer, only when media plays again (at most once a minute), and
+  right after installation it opens `welcome.html` with the install steps.
 
 ## Limitations
 
@@ -103,7 +100,7 @@ page.js (page world) ──DOM events──> relay.js (isolated world) ──por
   reload.
 - The browser's own single player still exists next to the per-tab ones.
   Earful hides it while the bridge is running (see
-  [native-host/README.md](../native-host/README.md)).
+  [docs/bridge.md](../docs/bridge.md)).
 - Tabs restored after a restart (or opened in the background) hold their
   media back until you look at them. They show as paused; pressing play
   switches to the tab so the browser lets it start.

@@ -1,3 +1,5 @@
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
@@ -6,6 +8,7 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 
 import {clearCache as clearArtCache} from './lib/art.js';
 import {AudioManager} from './lib/audio.js';
+import * as BridgeSetup from './lib/bridgeSetup.js';
 import {MediaKeys} from './lib/mediaKeys.js';
 import {PlayerManager} from './lib/mpris.js';
 import {EarfulIndicator} from './lib/panel.js';
@@ -28,6 +31,42 @@ export default class EarfulExtension extends Extension {
             Meta.KeyBindingFlags.NONE,
             Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
             () => this._toggleFocusMode());
+
+        // Register the browser helper once per login (enable also runs after
+        // every screen unlock), and again whenever the switch changes.
+        this._bridgeCancellable = new Gio.Cancellable();
+        this._bridgeChangedId = this._settings.connect('changed::browser-bridge',
+            () => this._syncBridge());
+        if (!this._bridgeSynced)
+            this._syncBridge();
+    }
+
+    _syncBridge() {
+        const cancellable = this._bridgeCancellable;
+        const enabled = this._settings.get_boolean('browser-bridge');
+        // One at a time, in order, so a quick off-on can't race.
+        this._bridgeQueue = (this._bridgeQueue ?? Promise.resolve())
+            .then(() => this._applyBridge(enabled, cancellable));
+    }
+
+    async _applyBridge(enabled, cancellable) {
+        if (cancellable.is_cancelled())
+            return;
+        const paths = BridgeSetup.defaultPaths(
+            GLib.build_filenamev([this.path, 'bridge', 'earful-host.js']));
+        try {
+            if (enabled) {
+                const {failed} = await BridgeSetup.register(paths, cancellable);
+                if (failed.length)
+                    console.warn(`Earful: could not set up browser tabs for ${failed.map(f => `${f.name} (${f.error})`).join(', ')}`);
+            } else {
+                await BridgeSetup.unregister(paths, cancellable);
+            }
+            this._bridgeSynced = true;
+        } catch (e) {
+            if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                logError(e, 'Earful: browser tabs setup');
+        }
     }
 
     _toggleFocusMode() {
@@ -43,6 +82,9 @@ export default class EarfulExtension extends Extension {
     }
 
     disable() {
+        this._bridgeCancellable.cancel();
+        this._bridgeCancellable = null;
+        this._settings.disconnect(this._bridgeChangedId);
         Main.wm.removeKeybinding('toggle-focus-mode');
 
         this._indicator.destroy();

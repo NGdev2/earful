@@ -12,3 +12,4 @@ node_modules/
 *.crx
 .claude/
 build/
+__pycache__/

@@ -1,0 +1,92 @@
+:root {
+    color-scheme: light dark;
+    --bg: #f6f5fa;
+    --card: #ffffff;
+    --text: #1d1b2e;
+    --muted: #5d5873;
+    --accent: #6a4fd0;
+    --code: #efecf8;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #16142e;
+        --card: #221f3d;
+        --text: #f1eff8;
+        --muted: #b4aecb;
+        --accent: #a995ff;
+        --code: #2d2950;
+    }
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.55 system-ui, "Ubuntu", "Cantarell", sans-serif;
+}
+
+main {
+    max-width: 680px;
+    margin: 48px auto;
+    padding: 32px 36px;
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgb(0 0 0 / 12%);
+}
+
+header {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+h1 {
+    margin: 4px 0 8px;
+    font-size: 1.6em;
+}
+
+h2 {
+    margin: 28px 0 6px;
+    font-size: 1.1em;
+}
+
+.lead,
+.note,
+.help {
+    color: var(--muted);
+}
+
+.command {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--code);
+    border-radius: 10px;
+}
+
+.command code {
+    flex: 1;
+    overflow-wrap: anywhere;
+    font: 14px/1.4 ui-monospace, "Ubuntu Mono", monospace;
+    user-select: all;
+}
+
+button {
+    padding: 6px 14px;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 8px;
+    font: inherit;
+    cursor: pointer;
+}
+
+a {
+    color: var(--accent);
+}
+
+.help ul {
+    padding-left: 20px;
+}

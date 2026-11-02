@@ -161,5 +161,12 @@
       <summary>Player the media keys control when pinned</summary>
     </key>
 
+    <!-- Browser tabs -->
+    <key name="browser-bridge" type="b">
+      <default>true</default>
+      <summary>Let the Earful Bridge browser add-on show each tab as its own player</summary>
+      <description>Registers Earful's small helper program with the browsers on this computer. Turning it off removes the registration.</description>
+    </key>
+
   </schema>
 </schemalist>
