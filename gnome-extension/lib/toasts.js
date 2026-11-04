@@ -16,7 +16,7 @@ import {SourceLine, VERTICAL} from './widgets.js';
 
 const WIDTH = 380;
 const COVER_SIZE = 72;
-// Must match .earful-toast in stylesheet.css (minus the border).
+// Must match .earful-toast-surface in stylesheet.css (minus the border).
 const RADIUS = 19;
 const MARGIN = 16;
 const SPACING = 10;
@@ -64,13 +64,14 @@ class Toast extends St.Button {
         box.add_child(text);
         // The design's scene lies under the content, edge to edge.
         this._scene = new SceneLayer(RADIUS);
-        const stack = new St.Widget({
+        this._surface = new St.Widget({
+            style_class: 'earful-toast-surface',
             layout_manager: new Clutter.BinLayout(),
             x_expand: true,
         });
-        stack.add_child(this._scene);
-        stack.add_child(box);
-        this.set_child(stack);
+        this._surface.add_child(this._scene);
+        this._surface.add_child(box);
+        this.set_child(this._surface);
 
         // Cover art often arrives a moment after the title; keep it fresh
         // as long as the same track is shown.
@@ -93,9 +94,18 @@ class Toast extends St.Button {
             'changed::design-color', () => this._restyle(),
             'changed::design-opacity', () => this._restyle(),
             'changed::animations', () => this._restyle(),
+            'changed::toast-shadow', () => this._syncShadow(),
             this);
 
+        this._syncShadow();
         this.showTrack();
+    }
+
+    _syncShadow() {
+        if (this._settings.get_boolean('toast-shadow'))
+            this.remove_style_class_name('earful-toast-flat');
+        else
+            this.add_style_class_name('earful-toast-flat');
     }
 
     _restyle() {
@@ -105,7 +115,7 @@ class Toast extends St.Button {
             return;
         const look = Look.lookFromSettings(this._settings);
         const palette = this._art.palette;
-        this.style = Look.surfaceStyle(look, palette, this.hover);
+        this._surface.style = Look.surfaceStyle(look, palette, this.hover);
         this._scene.update(look, palette, this.player.isPlaying);
         this._source.update(this.player, look.animate, Look.accentColor(look, palette));
     }

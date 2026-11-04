@@ -228,16 +228,26 @@
 
 /* Now playing popups */
 
+/* The shadow sits on the popup and the colors on its surface: St cross-fades
+   colors through a square texture, which would cut a shadow off. */
 .earful-toast {
-  background-color: rgba(28, 28, 32, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   padding: 0;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   color: #f2f2f2;
 }
 
-.earful-toast:hover {
+.earful-toast-flat {
+  box-shadow: none;
+}
+
+.earful-toast-surface {
+  background-color: rgba(28, 28, 32, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}
+
+.earful-toast:hover .earful-toast-surface {
   background-color: rgba(40, 40, 46, 0.96);
 }
 

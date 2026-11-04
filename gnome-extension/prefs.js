@@ -235,6 +235,7 @@ export default class EarfulPreferences extends ExtensionPreferences {
         popups.add(choiceRow(window, settings, 'toast-position', _('Position'), POSITIONS));
         popups.add(spinRow(settings, 'toast-duration', _('Seconds on screen'), 2, 30));
         popups.add(spinRow(settings, 'toast-max-visible', _('Maximum at once'), 1, 6));
+        popups.add(switchRow(settings, 'toast-shadow', _('Shadow')));
         popups.add(switchRow(settings, 'toast-hide-when-app-focused',
             _('Skip when the player is in front'),
             _('You already see what is playing.')));
