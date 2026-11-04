@@ -41,6 +41,10 @@
       <default>true</default>
       <summary>No popups while Do Not Disturb is on</summary>
     </key>
+    <key name="toast-shadow" type="b">
+      <default>true</default>
+      <summary>Soft shadow under popups</summary>
+    </key>
     <key name="toast-muted-apps" type="as">
       <default>[]</default>
       <summary>Players that never show popups</summary>
