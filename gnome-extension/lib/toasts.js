@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // "Now playing" popups: one per track change, stacked, slowly fading away.
 
 import Clutter from 'gi://Clutter';
@@ -12,7 +13,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
 import {SceneLayer} from './scenes.js';
-import {SourceLine, VERTICAL} from './widgets.js';
+import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
 const WIDTH = 380;
 const COVER_SIZE = 72;
@@ -25,10 +26,6 @@ const MOVE_MS = 350;
 const FADE_OUT_MS = 900;
 const HOVER_GRACE_MS = 1500;
 
-function scaleFactor() {
-    return St.ThemeContext.get_for_stage(global.stage).scale_factor;
-}
-
 const Toast = GObject.registerClass(
 class Toast extends St.Button {
     _init(player, settings) {
@@ -39,6 +36,10 @@ class Toast extends St.Button {
         });
         this.player = player;
         this._settings = settings;
+        this.dismissing = false;
+        this.placed = false;
+        this._timeoutId = 0;
+        this.connect('destroy', () => this.stopTimer());
 
         // A button centers its child; the card's content starts at the left.
         const box = new St.BoxLayout({
@@ -46,7 +47,7 @@ class Toast extends St.Button {
             x_expand: true,
             x_align: Clutter.ActorAlign.FILL,
         });
-        this._art = new CoverArt(COVER_SIZE, 'earful-toast-art');
+        this._art = new CoverArt(COVER_SIZE);
         box.add_child(this._art);
 
         const text = new St.BoxLayout({
@@ -83,8 +84,7 @@ class Toast extends St.Button {
             this._restyle();
         }, this);
         this._art.connect('palette-changed', () => this._restyle());
-        // Leaving the screen also ends the hover; restyling then would
-        // start a fade on a popup that is gone.
+        // Leaving the screen also ends the hover.
         this.connect('notify::hover', () => {
             if (this.get_stage())
                 this._restyle();
@@ -108,6 +108,23 @@ class Toast extends St.Button {
             this.add_style_class_name('earful-toast-flat');
     }
 
+    /** Calls onTimeout after ms, replacing a running timer. */
+    startTimer(ms, onTimeout) {
+        this.stopTimer();
+        this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+            this._timeoutId = 0;
+            onTimeout();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    stopTimer() {
+        if (this._timeoutId) {
+            GLib.source_remove(this._timeoutId);
+            this._timeoutId = 0;
+        }
+    }
+
     _restyle() {
         // A popup fading out is left as it is: changing it would ask for a
         // new layout of a widget about to be removed.
@@ -129,7 +146,6 @@ class Toast extends St.Button {
         this._artist.text = p.artistText;
         this._artist.visible = this._artist.text !== '';
     }
-
 });
 
 export class ToastManager {
@@ -225,14 +241,13 @@ export class ToastManager {
             if (toast.dismissing)
                 return;
             if (toast.hover)
-                this._stopTimer(toast);
+                toast.stopTimer();
             else
                 this._startTimer(toast, HOVER_GRACE_MS);
         });
 
         // Like notification banners: above windows, below modal dialogs,
-        // the on-screen keyboard and the screenshot UI. (Clickable by
-        // default; GNOME 50 rejects the old affectsInputRegion option.)
+        // the on-screen keyboard and the screenshot UI.
         Main.layoutManager.addChrome(toast);
         this._toasts.push(toast);
 
@@ -254,21 +269,8 @@ export class ToastManager {
         this._startTimer(toast);
     }
 
-    _startTimer(toast, ms) {
-        this._stopTimer(toast);
-        const duration = ms ?? this._settings.get_int('toast-duration') * 1000;
-        toast.timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, duration, () => {
-            toast.timeoutId = 0;
-            this._dismiss(toast, FADE_OUT_MS);
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _stopTimer(toast) {
-        if (toast.timeoutId) {
-            GLib.source_remove(toast.timeoutId);
-            toast.timeoutId = 0;
-        }
+    _startTimer(toast, ms = this._settings.get_int('toast-duration') * 1000) {
+        toast.startTimer(ms, () => this._dismiss(toast, FADE_OUT_MS));
     }
 
     _dismiss(toast, duration) {
@@ -276,10 +278,9 @@ export class ToastManager {
             return;
         toast.dismissing = true;
         toast.reactive = false;
-        // Drop the hover now: losing it when the popup is removed would
-        // restyle it on its way out.
+        // Drop the hover now, or losing it on removal would restyle it.
         toast.track_hover = false;
-        this._stopTimer(toast);
+        toast.stopTimer();
 
         toast.ease({
             opacity: 0,
@@ -294,7 +295,6 @@ export class ToastManager {
         if (index === -1)
             return;
         this._toasts.splice(index, 1);
-        this._stopTimer(toast);
         // Destroying also drops it from the layout manager. Calling
         // removeChrome() first would queue one last layout for it, which
         // GNOME 48 then runs after it is gone.
@@ -306,10 +306,8 @@ export class ToastManager {
     _dismissAll() {
         const toasts = this._toasts;
         this._toasts = [];
-        for (const toast of toasts) {
-            this._stopTimer(toast);
+        for (const toast of toasts)
             toast.destroy();
-        }
     }
 
     _relayout(animate) {
@@ -342,8 +340,7 @@ export class ToastManager {
                 : workArea.y + workArea.height - offset - height;
             offset += height + spacing;
 
-            // A popup fading out keeps its place (and its slot) until it is
-            // gone; moving it too would animate a widget about to be removed.
+            // A popup fading out keeps its place until it is gone.
             if (toast.dismissing)
                 continue;
             if (animate && toast.placed) {

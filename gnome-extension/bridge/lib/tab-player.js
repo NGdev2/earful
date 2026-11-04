@@ -1,14 +1,13 @@
-// One browser tab exposed as an MPRIS player on the session bus.
-//
-// Object paths are per D-Bus connection, and every player must live at
-// /org/mpris/MediaPlayer2, so each tab gets its own connection.
+// SPDX-License-Identifier: GPL-3.0-or-later
+// One browser tab exposed as an MPRIS player on the session bus. Every player
+// must live at /org/mpris/MediaPlayer2, so each tab gets its own connection.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 import * as Artwork from './artwork.js';
 
-export const BUS_NAME_PREFIX = 'org.mpris.MediaPlayer2.earful_tab_';
+const BUS_NAME_PREFIX = 'org.mpris.MediaPlayer2.earful_tab_';
 const MPRIS_PATH = '/org/mpris/MediaPlayer2';
 const MIN_RATE = 0.25;
 const MAX_RATE = 4;
@@ -68,10 +67,8 @@ const PLAYER_IFACE = `
   </interface>
 </node>`;
 
-// Parsed once and kept for the whole run: GJS caches lookups per interface
-// description and never drops the cache, so descriptions freed with a
-// closed tab could leave a later tab's root interface answering
-// "No such property" for everything.
+// Parsed once for the whole run: GJS never drops its per-interface cache, so
+// infos freed with a closed tab could break a later tab ("No such property").
 const ROOT_INFO = Gio.DBusInterfaceInfo.new_for_xml(ROOT_IFACE);
 const PLAYER_INFO = Gio.DBusInterfaceInfo.new_for_xml(PLAYER_IFACE);
 
@@ -117,7 +114,24 @@ const EMPTY_STATE = {
     canSetVolume: false,
 };
 
+const STATUSES = ['Playing', 'Paused', 'Stopped'];
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+// Keeps only the fields of EMPTY_STATE; a value of the wrong type (or a
+// number that isn't finite) falls back to the default.
+function sanitize(state) {
+    const clean = {};
+    for (const [key, fallback] of Object.entries(EMPTY_STATE)) {
+        const value = state[key];
+        const valid = typeof value === typeof fallback &&
+            (typeof value !== 'number' || Number.isFinite(value));
+        clean[key] = valid ? value : fallback;
+    }
+    if (!STATUSES.includes(clean.status))
+        clean.status = EMPTY_STATE.status;
+    return clean;
+}
 
 export class TabPlayer {
     /**
@@ -134,6 +148,7 @@ export class TabPlayer {
         this._stateTime = GLib.get_monotonic_time();
         this._trackKey = null;
         this._trackNumber = 0;
+        this._artSource = '';
         this._artUri = '';
 
         this._root = Gio.DBusExportedObject.wrapJSObject(ROOT_INFO, this);
@@ -154,15 +169,16 @@ export class TabPlayer {
     /** Applies a new state reported by the extension. */
     update(state) {
         const expected = this._positionSeconds();
-        const key = [state.title, state.artist, state.album].join('\u0001');
+        this._state = sanitize(state);
+        this._stateTime = GLib.get_monotonic_time();
+
+        const {title, artist, album} = this._state;
+        const key = [title, artist, album].join('\u0001');
         const sameTrack = key === this._trackKey;
         if (!sameTrack) {
             this._trackKey = key;
             this._trackNumber++;
         }
-
-        this._state = {...EMPTY_STATE, ...state};
-        this._stateTime = GLib.get_monotonic_time();
         this._setArt(this._state.artUrl);
         this.publish();
 
@@ -196,7 +212,9 @@ export class TabPlayer {
         this._player.unexport();
         try {
             this._connection.close_sync(null);
-        } catch {}
+        } catch {
+            // Already closed, e.g. the session bus went away first.
+        }
         this._setArt('');
     }
 

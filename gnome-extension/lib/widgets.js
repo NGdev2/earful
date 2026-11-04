@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Small pieces shared by the menu and the popups.
 
 import Clutter from 'gi://Clutter';
@@ -10,6 +11,11 @@ import St from 'gi://St';
 export const VERTICAL = GObject.Object.find_property.call(St.BoxLayout, 'orientation')
     ? {orientation: Clutter.Orientation.VERTICAL}
     : {vertical: true};
+
+/** The display's scale factor (2 on HiDPI). */
+export function scaleFactor() {
+    return St.ThemeContext.get_for_stage(global.stage).scale_factor;
+}
 
 const BARS = 3;
 // Heights the bars rest at between dances.

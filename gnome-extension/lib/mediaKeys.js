@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Sends the media keys to a player of your choice.
 //
 // gnome-settings-daemon grabs the media keys through the shell and picks
@@ -8,6 +9,7 @@
 
 import Clutter from 'gi://Clutter';
 
+import {InjectionManager} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const ACTIONS = new Map([
@@ -56,41 +58,21 @@ export class MediaKeys {
     }
 
     _hook() {
-        const service = Main.shellDBusService;
-        if (this._service || typeof service?._emitAcceleratorActivated !== 'function')
+        if (this._injections)
             return;
 
-        this._service = service;
-        this._hadOwn = Object.hasOwn(service, '_emitAcceleratorActivated');
-        this._original = service._emitAcceleratorActivated;
         const self = this;
-
-        // If someone wraps us later we can't unwrap; then just pass through.
-        const original = this._original;
-        const hook = {active: true};
-        this._hookState = hook;
-        this._hookFn = function (...args) {
-            if (!hook.active || !self._handle())
-                original.apply(this, args);
-        };
-        service._emitAcceleratorActivated = this._hookFn;
+        this._injections = new InjectionManager();
+        this._injections.overrideMethod(Main.shellDBusService, '_emitAcceleratorActivated',
+            original => function (...args) {
+                if (!self._handle())
+                    original.apply(this, args);
+            });
     }
 
     _unhook() {
-        if (!this._service)
-            return;
-
-        this._hookState.active = false;
-        if (this._service._emitAcceleratorActivated === this._hookFn) {
-            if (this._hadOwn)
-                this._service._emitAcceleratorActivated = this._original;
-            else
-                delete this._service._emitAcceleratorActivated;
-        }
-        this._service = null;
-        this._original = null;
-        this._hookFn = null;
-        this._hookState = null;
+        this._injections?.clear();
+        this._injections = null;
     }
 
     _handle() {

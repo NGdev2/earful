@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Animated scenes painted behind a card or popup: a spinning record, a
 // sound wave, a retro LED equalizer, a note riding a road, a cassette.
 //
@@ -12,6 +13,7 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 import * as Look from './look.js';
+import {scaleFactor} from './widgets.js';
 
 const TAU = 2 * Math.PI;
 const FRAME_SECONDS = 1 / 30;
@@ -486,7 +488,7 @@ class SceneLayer extends St.DrawingArea {
     }
 
     update(look, palette, playing) {
-        const name = Look.isScene(look) ? look.design : '';
+        const name = Object.hasOwn(SCENES, look.design) ? look.design : '';
         if (name !== this._name) {
             this._name = name;
             this._scene = name ? new SCENES[name]() : null;
@@ -543,7 +545,7 @@ class SceneLayer extends St.DrawingArea {
         const cr = this.get_context();
         const [w, h] = this.get_surface_size();
         if (this._scene && w > 0 && h > 0) {
-            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            const scale = scaleFactor();
             roundedRect(cr, 0, 0, w, h, Math.min(this._radius * scale, h / 2));
             cr.clip();
             cr.pushGroup();

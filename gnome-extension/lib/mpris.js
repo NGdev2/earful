@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Discovers MPRIS media players on the session bus and keeps their state.
 
 import Gio from 'gi://Gio';
@@ -5,6 +6,9 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 
 import * as Signals from 'resource:///org/gnome/shell/misc/signals.js';
+
+Gio._promisify(Gio.DBusConnection.prototype, 'call');
+Gio._promisify(Gio.DBusProxy.prototype, 'call');
 
 const MPRIS_PREFIX = 'org.mpris.MediaPlayer2.';
 const MPRIS_PATH = '/org/mpris/MediaPlayer2';
@@ -41,7 +45,6 @@ const MprisPlayerIface = `
 <node>
   <interface name="org.mpris.MediaPlayer2.Player">
     <method name="PlayPause"/>
-    <method name="Play"/>
     <method name="Pause"/>
     <method name="Next"/>
     <method name="Previous"/>
@@ -50,20 +53,14 @@ const MprisPlayerIface = `
     <property name="Metadata" type="a{sv}" access="read"/>
     <property name="CanGoNext" type="b" access="read"/>
     <property name="CanGoPrevious" type="b" access="read"/>
-    <property name="CanPlay" type="b" access="read"/>
-    <property name="CanPause" type="b" access="read"/>
     <property name="CanControl" type="b" access="read"/>
     <property name="Volume" type="d" access="readwrite"/>
   </interface>
 </node>`;
 
-let DBusProxy, MprisProxy, MprisPlayerProxy;
-
-function makeProxyClasses() {
-    DBusProxy ??= Gio.DBusProxy.makeProxyWrapper(DBusIface);
-    MprisProxy ??= Gio.DBusProxy.makeProxyWrapper(MprisIface);
-    MprisPlayerProxy ??= Gio.DBusProxy.makeProxyWrapper(MprisPlayerIface);
-}
+const DBusProxy = Gio.DBusProxy.makeProxyWrapper(DBusIface);
+const MprisProxy = Gio.DBusProxy.makeProxyWrapper(MprisIface);
+const MprisPlayerProxy = Gio.DBusProxy.makeProxyWrapper(MprisPlayerIface);
 
 // Players published by our browser bridge, one per tab (see ../bridge/).
 const BRIDGE_TAB = /^org\.mpris\.MediaPlayer2\.earful_tab_\d+\.instance(\d+)$/;
@@ -74,19 +71,10 @@ const BROWSER_INSTANCE = /^org\.mpris\.MediaPlayer2\.[^.]+\.instance(\d+)$/;
 // can't be matched; any bridge tab from Firefox stands in for it.
 const FIREFOX = /^org\.mpris\.MediaPlayer2\.firefox\./;
 
-/** Promise wrapper for an async D-Bus method call. */
-function dbusCall(name, path, iface, method, params, replyType, cancellable) {
-    return new Promise((resolve, reject) => {
-        Gio.DBus.session.call(name, path, iface, method, params,
-            new GLib.VariantType(replyType), Gio.DBusCallFlags.NONE, -1,
-            cancellable, (bus, res) => {
-                try {
-                    resolve(bus.call_finish(res).deepUnpack());
-                } catch (e) {
-                    reject(e);
-                }
-            });
-    });
+async function dbusCall(name, path, iface, method, params, replyType, cancellable) {
+    const reply = await Gio.DBus.session.call(name, path, iface, method, params,
+        new GLib.VariantType(replyType), Gio.DBusCallFlags.NONE, -1, cancellable);
+    return reply.deepUnpack();
 }
 
 function asString(value) {
@@ -136,7 +124,6 @@ export class Player extends Signals.EventEmitter {
         this.trackKey = null;
         this.canGoNext = false;
         this.canGoPrevious = false;
-        this.canPlay = false;
         this.lastActive = 0;
         this.startedAt = 0;
         // MPRIS volume (0..1), only when the player really lets us set it.
@@ -160,8 +147,10 @@ export class Player extends Signals.EventEmitter {
     }
 
     async _init() {
-        this._mprisProxy = await this._makeProxy(MprisProxy);
-        this._playerProxy = await this._makeProxy(MprisPlayerProxy);
+        this._mprisProxy = await MprisProxy.newAsync(Gio.DBus.session,
+            this.busName, MPRIS_PATH, this._cancellable);
+        this._playerProxy = await MprisPlayerProxy.newAsync(Gio.DBus.session,
+            this.busName, MPRIS_PATH, this._cancellable);
 
         this.identity = this._mprisProxy.Identity ?? '';
         this.desktopEntry = this._mprisProxy.DesktopEntry ?? '';
@@ -170,6 +159,9 @@ export class Player extends Signals.EventEmitter {
                 .lookup_app(`${this.desktopEntry}.desktop`);
         }
         await Promise.all([this._findAppByPid(), this._checkVolume()]);
+        // Both ignore errors, so check whether the player went away meanwhile.
+        if (this._cancellable.is_cancelled())
+            return;
 
         this._playerProxy.connectObject('g-properties-changed',
             () => this._update(), this);
@@ -207,14 +199,6 @@ export class Player extends Signals.EventEmitter {
             this._volumeWritable =
                 !!(prop && prop.flags & Gio.DBusPropertyInfoFlags.WRITABLE);
         } catch {}
-    }
-
-    _makeProxy(ProxyClass) {
-        return new Promise((resolve, reject) => {
-            new ProxyClass(Gio.DBus.session, this.busName, MPRIS_PATH,
-                (proxy, error) => (error ? reject(error) : resolve(proxy)),
-                this._cancellable);
-        });
     }
 
     /** Stable key used to remember per-app preferences. */
@@ -269,7 +253,6 @@ export class Player extends Signals.EventEmitter {
         this.artUrl = asString(metadata['mpris:artUrl']);
         this.canGoNext = proxy.CanGoNext ?? false;
         this.canGoPrevious = proxy.CanGoPrevious ?? false;
-        this.canPlay = proxy.CanPlay ?? false;
 
         const volume = proxy.Volume;
         this.volume = this._volumeWritable && !this._volumeFailed &&
@@ -335,24 +318,21 @@ export class Player extends Signals.EventEmitter {
         this._playerProxy?.PreviousAsync().catch(logError);
     }
 
-    setVolume(value) {
+    async setVolume(value) {
         if (this.volume === null)
             return;
-        this._playerProxy.call('org.freedesktop.DBus.Properties.Set',
-            new GLib.Variant('(ssv)',
-                [PLAYER_IFACE, 'Volume', new GLib.Variant('d', value)]),
-            Gio.DBusCallFlags.NONE, -1, this._cancellable, (proxy, res) => {
-                try {
-                    proxy.call_finish(res);
-                } catch (e) {
-                    if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                        return;
-                    // Declared writable but refused: fall back to the mixer.
-                    this._volumeFailed = true;
-                    if (!this._destroyed)
-                        this._update();
-                }
-            });
+        try {
+            await this._playerProxy.call('org.freedesktop.DBus.Properties.Set',
+                new GLib.Variant('(ssv)',
+                    [PLAYER_IFACE, 'Volume', new GLib.Variant('d', value)]),
+                Gio.DBusCallFlags.NONE, -1, this._cancellable);
+        } catch (e) {
+            if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                return;
+            // Declared writable but refused: fall back to the mixer.
+            this._volumeFailed = true;
+            this._update();
+        }
     }
 
     /** Bring the player (and, for browsers, its tab) to the front. */
@@ -365,10 +345,6 @@ export class Player extends Signals.EventEmitter {
     }
 
     destroy() {
-        if (this._destroyed)
-            return;
-        this._destroyed = true;
-
         this._cancellable.cancel();
         this._playerProxy?.disconnectObject(this);
         this._mprisProxy = null;
@@ -387,7 +363,6 @@ export class PlayerManager extends Signals.EventEmitter {
     constructor() {
         super();
 
-        makeProxyClasses();
         this._players = new Map();
         this._cancellable = new Gio.Cancellable();
 
@@ -398,12 +373,8 @@ export class PlayerManager extends Signals.EventEmitter {
     }
 
     async _init() {
-        this._proxy = await new Promise((resolve, reject) => {
-            new DBusProxy(Gio.DBus.session,
-                'org.freedesktop.DBus', '/org/freedesktop/DBus',
-                (proxy, error) => (error ? reject(error) : resolve(proxy)),
-                this._cancellable);
-        });
+        this._proxy = await DBusProxy.newAsync(Gio.DBus.session,
+            'org.freedesktop.DBus', '/org/freedesktop/DBus', this._cancellable);
 
         this._signalId = this._proxy.connectSignal('NameOwnerChanged',
             (proxy, sender, [name, oldOwner, newOwner]) => {
@@ -415,7 +386,7 @@ export class PlayerManager extends Signals.EventEmitter {
                     this._addPlayer(name, true);
             });
 
-        const [names] = await this._proxy.ListNamesAsync();
+        const [names] = await this._proxy.ListNamesAsync(this._cancellable);
         for (const name of names) {
             if (name.startsWith(MPRIS_PREFIX))
                 this._addPlayer(name, false);
@@ -423,7 +394,7 @@ export class PlayerManager extends Signals.EventEmitter {
     }
 
     _addPlayer(busName, announce) {
-        if (this._destroyed || this._players.has(busName))
+        if (this._players.has(busName))
             return;
 
         const player = new Player(busName, {announce});
@@ -480,7 +451,6 @@ export class PlayerManager extends Signals.EventEmitter {
     }
 
     destroy() {
-        this._destroyed = true;
         this._cancellable.cancel();
         if (this._signalId)
             this._proxy.disconnectSignal(this._signalId);

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Designs for popups and cards: a gradient, dark glass, an animated scene
 // (see scenes.js) or the system theme, in the cover's colors or a fixed
 // one. Styles are inline, so they win over the theme.
@@ -18,8 +19,6 @@ const COLORS = {
     pink: [0.9, 0.6],
     graphite: [0.62, 0.06],
 };
-
-export const SCENES = ['vinyl', 'wave', 'leds', 'road', 'cassette'];
 
 const rgb = c => `rgb(${c.join(', ')})`;
 const rgba = (c, alpha) => `rgba(${c.join(', ')}, ${alpha.toFixed(2)})`;
@@ -47,11 +46,6 @@ export function paletteFor(look, coverPalette) {
         end: hslToRgb([(h + 0.06) % 1, s, 0.2]),
         accent: hslToRgb([h, s > 0.1 ? Math.max(s, 0.7) : s, 0.64]),
     };
-}
-
-/** True when the design draws an animated scene behind the content. */
-export function isScene(look) {
-    return SCENES.includes(look.design);
 }
 
 /** True when the design paints its own background (white text on it). */

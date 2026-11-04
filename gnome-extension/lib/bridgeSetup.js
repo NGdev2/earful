@@ -1,11 +1,9 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Registers Earful's native messaging host (bridge/earful-host.js) with the
 // browsers on this computer, so the Earful Bridge browser add-on can start
 // it. A registration is one small JSON file per browser, in the folder where
 // that browser looks for native messaging hosts. Nothing else is touched.
-//
-// Uses only Gio and GLib, so the extension, its preferences, tools/bridge.js
-// and the tests can all share it. Every function takes the folders to use,
-// which keeps tests away from the real home folder.
+// Uses only Gio and GLib, so the preferences can import it too.
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -20,20 +18,15 @@ Gio._promisify(Gio.File.prototype, 'delete_async');
 export const HOST_NAME = 'io.github.ngdev2.earful';
 const DESCRIPTION = 'Earful: one media player per browser tab';
 
-// The Earful Bridge add-on: its Chrome Web Store ID, which is also its ID
-// when loaded unpacked (the "key" in browser-extension/manifest.json is the
-// store's public key), and the development ID used before 0.2.1. Brave,
-// Edge, Vivaldi and Opera install from the Chrome Web Store too.
-export const CHROME_EXTENSION_IDS = [
-    'hlomkcgmmialafamfkkpiamgefhlidll',
-    'gjpjaodbgfodpakidffoooacjemeidmn',
-];
+// Chrome Web Store ID; also the unpacked ID, as the add-on's manifest carries
+// the store key. Brave, Edge, Vivaldi and Opera install from the store too.
+export const CHROME_EXTENSION_ID = 'hlomkcgmmialafamfkkpiamgefhlidll';
 export const FIREFOX_EXTENSION_ID = 'earful@ngdev2.github.io';
 
 // Chromium-based browsers: config folder (under ~/.config) and programs.
 // Snap and Flatpak builds can't start a program outside their sandbox, so
 // programs found under /snap or a Flatpak folder don't count.
-export const CHROMIUM_BROWSERS = [
+const CHROMIUM_BROWSERS = [
     {id: 'chrome', name: 'Google Chrome', dir: 'google-chrome', programs: ['google-chrome', 'google-chrome-stable']},
     {id: 'chrome-beta', name: 'Google Chrome Beta', dir: 'google-chrome-beta', programs: ['google-chrome-beta']},
     {id: 'chrome-unstable', name: 'Google Chrome Dev', dir: 'google-chrome-unstable', programs: ['google-chrome-unstable']},
@@ -53,7 +46,6 @@ function sandboxed(path) {
     return path.startsWith('/snap/') || path.includes('/flatpak/');
 }
 
-// Defaults for the real session. Tests pass their own.
 export function defaultPaths(hostPath) {
     return {
         home: GLib.get_home_dir(),
@@ -70,7 +62,7 @@ function isDir(path) {
 
 function hasProgram(paths, programs) {
     return programs.some(name => {
-        const found = paths.findProgram?.(name);
+        const found = paths.findProgram(name);
         return found && !sandboxed(found);
     });
 }
@@ -78,7 +70,7 @@ function hasProgram(paths, programs) {
 // Where each browser on this computer reads its native messaging hosts:
 // [{id, name, kind: 'chromium' | 'firefox', dir}]. A browser counts when its
 // config folder exists or its program is installed.
-export function targets(paths) {
+function targets(paths) {
     const list = [];
     for (const browser of CHROMIUM_BROWSERS) {
         const root = GLib.build_filenamev([paths.configDir, browser.dir]);
@@ -92,12 +84,8 @@ export function targets(paths) {
         }
     }
 
-    // Firefox reads ~/.mozilla/native-messaging-hosts, also when its profile
-    // lives in ~/.config/mozilla (Mozilla bug 2005167; a fix will read
-    // ~/.config/mozilla first). Firefox picks its old profile folder whenever
-    // ~/.mozilla exists, so that folder is only created for the Snap build,
-    // whose profile lives inside the Snap and whose desktop portal reads
-    // ~/.mozilla.
+    // Firefox reads hosts only from ~/.mozilla for now (Mozilla bug 2005167), but goes
+    // back to its old profile when that folder exists: create it only for Snap Firefox.
     const legacy = GLib.build_filenamev([paths.home, '.mozilla']);
     const xdg = GLib.build_filenamev([paths.configDir, 'mozilla']);
     if (isDir(legacy) || paths.snapFirefox) {
@@ -111,7 +99,7 @@ export function targets(paths) {
     return list;
 }
 
-export function manifestFor(kind, hostPath) {
+function manifestFor(kind, hostPath) {
     const manifest = {
         name: HOST_NAME,
         description: DESCRIPTION,
@@ -121,7 +109,7 @@ export function manifestFor(kind, hostPath) {
     if (kind === 'firefox')
         manifest.allowed_extensions = [FIREFOX_EXTENSION_ID];
     else
-        manifest.allowed_origins = CHROME_EXTENSION_IDS.map(id => `chrome-extension://${id}/`);
+        manifest.allowed_origins = [`chrome-extension://${CHROME_EXTENSION_ID}/`];
     return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
@@ -175,7 +163,7 @@ export async function register(paths, cancellable = null) {
         await makeExecutable(paths.hostPath, cancellable);
     } catch (e) {
         // A system-wide install may be read-only and already executable.
-        if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+        if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
             throw e;
     }
     for (const target of targets(paths)) {
@@ -189,7 +177,7 @@ export async function register(paths, cancellable = null) {
                 null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
             result.written.push(target.name);
         } catch (e) {
-            if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+            if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 throw e;
             result.failed.push({name: target.name, error: e.message});
         }
@@ -205,7 +193,7 @@ export async function unregister(paths, cancellable = null) {
             await manifestFile(target).delete_async(GLib.PRIORITY_DEFAULT, cancellable);
             removed.push(target.name);
         } catch (e) {
-            if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+            if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 throw e;
         }
     }
@@ -228,4 +216,50 @@ export async function status(paths, cancellable = null) {
         list.push({...target, registered});
     }
     return list;
+}
+
+// Keeps the registrations in line with the browser-bridge setting while the
+// extension is enabled.
+export class BridgeSync {
+    constructor(settings, hostPath) {
+        this._settings = settings;
+        this._hostPath = hostPath;
+        this._cancellable = new Gio.Cancellable();
+        this._queue = Promise.resolve();
+        this._changedId = settings.connect('changed::browser-bridge', () => this._sync());
+        this._sync();
+    }
+
+    _sync() {
+        const enabled = this._settings.get_boolean('browser-bridge');
+        // One at a time: cancelling doesn't undo a delete already running, so a
+        // quick off-on could otherwise race.
+        this._queue = this._queue.then(() => this._apply(enabled));
+    }
+
+    async _apply(enabled) {
+        if (this._cancellable.is_cancelled())
+            return;
+        const paths = defaultPaths(this._hostPath);
+        try {
+            if (enabled) {
+                const {failed} = await register(paths, this._cancellable);
+                if (failed.length) {
+                    const list = failed.map(f => `${f.name} (${f.error})`).join(', ');
+                    console.warn(`Earful: could not set up browser tabs for ${list}`);
+                }
+            } else {
+                await unregister(paths, this._cancellable);
+            }
+        } catch (e) {
+            if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                logError(e, 'Earful: browser tabs setup');
+        }
+    }
+
+    destroy() {
+        this._cancellable.cancel();
+        this._settings.disconnect(this._changedId);
+        this._settings = null;
+    }
 }

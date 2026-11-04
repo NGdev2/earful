@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Cover art: square-cropped, small, with rounded corners.
 
 import Clutter from 'gi://Clutter';
@@ -9,6 +10,11 @@ import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
+import {scaleFactor} from './widgets.js';
+
+Gio._promisify(Gio.File.prototype, 'load_contents_async');
+Gio._promisify(GdkPixbuf.Pixbuf, 'new_from_stream_async');
+
 // Cover art is loaded by the shell itself, so only allow local files and web URLs.
 const ART_URL = /^(file|https?):\/\//;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -19,31 +25,6 @@ const CACHE_SIZE = 24;
 // Recently loaded covers, newest last. Keyed by track too: some players
 // (Chrome) reuse one file name for every cover.
 const cache = new Map();
-
-function loadBytes(file) {
-    return new Promise((resolve, reject) => {
-        file.load_contents_async(null, (f, res) => {
-            try {
-                resolve(f.load_contents_finish(res)[1]);
-            } catch (e) {
-                reject(e);
-            }
-        });
-    });
-}
-
-function decode(bytes) {
-    return new Promise((resolve, reject) => {
-        const stream = Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(bytes));
-        GdkPixbuf.Pixbuf.new_from_stream_async(stream, null, (s, res) => {
-            try {
-                resolve(GdkPixbuf.Pixbuf.new_from_stream_finish(res));
-            } catch (e) {
-                reject(e);
-            }
-        });
-    });
-}
 
 function rgbToHsl([r, g, b]) {
     r /= 255;
@@ -81,8 +62,6 @@ export function hslToRgb([h, s, l]) {
     };
     return [hue(h + 1 / 3), hue(h), hue(h - 1 / 3)].map(v => Math.round(v * 255));
 }
-
-const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
 /**
  * The cover's main colors, toned for a card under white text:
@@ -127,20 +106,21 @@ function makePalette(pixbuf) {
         Math.min(Math.abs(c[0] - first[0]), 1 - Math.abs(c[0] - first[0])) > 0.08 &&
         c[1] > 0.15) ?? first;
 
-    const tone = ([h, s], l) => hslToRgb([h, clamp(s, 0, 0.75), l]);
+    const tone = ([h, s], l) => hslToRgb([h, Math.clamp(s, 0, 0.75), l]);
     return {
         start: tone(first, 0.36),
         end: tone(second, 0.2),
-        accent: hslToRgb([first[0], clamp(first[1], first[1] > 0.15 ? 0.55 : 0, 0.85), 0.66]),
+        accent: hslToRgb([first[0], Math.clamp(first[1], first[1] > 0.15 ? 0.55 : 0, 0.85), 0.66]),
     };
 }
 
 /** Crops the middle square (video thumbnails are wide) and shrinks it. */
 async function makeCover(url) {
-    const bytes = await loadBytes(Gio.File.new_for_uri(url));
+    const [bytes] = await Gio.File.new_for_uri(url).load_contents_async(null);
     if (bytes.length > MAX_BYTES)
         throw new Error('cover art too large');
-    const image = await decode(bytes);
+    const image = await GdkPixbuf.Pixbuf.new_from_stream_async(
+        Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(bytes)), null);
     const side = Math.min(image.width, image.height);
     const square = image.new_subpixbuf(
         Math.floor((image.width - side) / 2),
@@ -188,11 +168,11 @@ float d = length(max(q, 0.0)) - radius;
 cogl_color_out *= clamp(0.5 - d, 0.0, 1.0);
 `;
 
-function cornerRadius(effect, width, height) {
-    return Math.min(effect._radius * scaleFactor(), width / 2, height / 2);
+function cornerRadius(radius, width, height) {
+    return Math.min(radius * scaleFactor(), width / 2, height / 2);
 }
 
-// GNOME 46-50: Shell.GLSLEffect builds the pipeline from snippets.
+// GNOME 46-50: Shell.GLSLEffect builds the pipeline from the snippet.
 const GLSLCorners = Shell.GLSLEffect && GObject.registerClass(
 class GLSLCorners extends Shell.GLSLEffect {
     _init(radius) {
@@ -210,13 +190,13 @@ class GLSLCorners extends Shell.GLSLEffect {
         const [width, height] = this.actor.get_size();
         this.set_uniform_float(this.get_uniform_location('size'), 2, [width, height]);
         this.set_uniform_float(this.get_uniform_location('radius'), 1,
-            [cornerRadius(this, width, height)]);
+            [cornerRadius(this._radius, width, height)]);
         super.vfunc_paint_target(node, paintContext);
     }
 });
 
-// GNOME 51 removed Shell.GLSLEffect: the same snippet, added to the
-// pipeline the offscreen effect makes (again whenever it makes a new one).
+// GNOME 51 removed Shell.GLSLEffect: the same snippet, added to the pipeline
+// the offscreen effect makes (again whenever it makes a new one).
 const PipelineCorners = !GLSLCorners && GObject.registerClass(
 class PipelineCorners extends Clutter.OffscreenEffect {
     _init(radius) {
@@ -236,17 +216,13 @@ class PipelineCorners extends Clutter.OffscreenEffect {
             const [width, height] = this.actor.get_size();
             pipeline.set_uniform_float(pipeline.get_uniform_location('size'), 2, 1, [width, height]);
             pipeline.set_uniform_1f(pipeline.get_uniform_location('radius'),
-                cornerRadius(this, width, height));
+                cornerRadius(this._radius, width, height));
         }
         super.vfunc_paint_target(node, paintContext);
     }
 });
 
 const RoundedCorners = GLSLCorners || PipelineCorners;
-
-function scaleFactor() {
-    return St.ThemeContext.get_for_stage(global.stage).scale_factor;
-}
 
 /**
  * A player's cover, or its app icon on a tinted tile while there is none
@@ -255,13 +231,10 @@ function scaleFactor() {
 export const CoverArt = GObject.registerClass({
     Signals: {'palette-changed': {}},
 }, class CoverArt extends St.Bin {
-    /**
-     * @param {number} size side in logical pixels
-     * @param {string} styleClass extra style class for the tile
-     */
-    _init(size, styleClass) {
+    /** @param {number} size side in logical pixels */
+    _init(size) {
         super._init({
-            style_class: `earful-cover ${styleClass}`,
+            style_class: 'earful-cover',
             style: `width: ${size}px; height: ${size}px;`,
             y_align: Clutter.ActorAlign.CENTER,
         });

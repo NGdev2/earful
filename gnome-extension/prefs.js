@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
@@ -8,12 +9,10 @@ import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Ex
 
 import * as BridgeSetup from './lib/bridgeSetup.js';
 
-// Where to get the Earful Bridge add-on. The store pages replace these once
-// the add-on is listed there.
-const ADDON_PAGES = {
-    chrome: 'https://github.com/NGdev2/earful#browser-tabs-as-separate-players-optional',
-    firefox: 'https://github.com/NGdev2/earful#browser-tabs-as-separate-players-optional',
-};
+// Where to get the Earful Bridge add-on.
+const ADDON_PAGE = 'https://github.com/NGdev2/earful#browser-tabs-as-separate-players-optional';
+// The shell (re)registers the helper when the switch changes; let it finish first.
+const BRIDGE_REFRESH_DELAY_MS = 800;
 
 const POSITIONS = [
     ['top-left', () => _('Top left')],
@@ -295,10 +294,10 @@ export default class EarfulPreferences extends ExtensionPreferences {
         tabs.add(switchRow(settings, 'browser-bridge', _('Show each tab as its own player'),
             _('Lets the add-on start Earful\'s small helper program.')));
         const getAddon = new Adw.ActionRow({title: _('Get the add-on')});
-        for (const [label, uri] of [[_('Chrome, Brave, Edge'), ADDON_PAGES.chrome],
-            [_('Firefox'), ADDON_PAGES.firefox]]) {
+        for (const label of [_('Chrome, Brave, Edge'), _('Firefox')]) {
             const button = new Gtk.Button({label, valign: Gtk.Align.CENTER});
-            button.connect('clicked', () => new Gtk.UriLauncher({uri}).launch(window, null, null));
+            button.connect('clicked', () =>
+                new Gtk.UriLauncher({uri: ADDON_PAGE}).launch(window, null, null));
             getAddon.add_suffix(button);
         }
         tabs.add(getAddon);
@@ -306,12 +305,12 @@ export default class EarfulPreferences extends ExtensionPreferences {
         const refresh = () => this._fillBrowsers(settings, tabs).catch(e =>
             logError(e, 'Earful: could not check browser tabs'));
         refresh();
-        // The shell (re)registers when the switch changes; show the result.
+        // Show the shell's result when the switch changes.
         let refreshId = 0;
         const bridgeId = settings.connect('changed::browser-bridge', () => {
             if (refreshId)
                 GLib.source_remove(refreshId);
-            refreshId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+            refreshId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, BRIDGE_REFRESH_DELAY_MS, () => {
                 refreshId = 0;
                 refresh();
                 return GLib.SOURCE_REMOVE;
@@ -360,7 +359,7 @@ export default class EarfulPreferences extends ExtensionPreferences {
         const paths = BridgeSetup.defaultPaths(
             GLib.build_filenamev([this.path, 'bridge', 'earful-host.js']));
         const enabled = settings.get_boolean('browser-bridge');
-        // A browser installed since login gets set up right away.
+        // A browser installed since the shell last checked gets set up right away.
         if (enabled)
             await BridgeSetup.register(paths);
         const found = await BridgeSetup.status(paths);

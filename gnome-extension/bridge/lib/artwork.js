@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Cover art URLs for MPRIS. http(s) URLs pass through untouched. Inline
 // data: images are written to $XDG_RUNTIME_DIR/earful/ (private, in RAM,
 // wiped at logout) because MPRIS clients expect a URI they can open.
@@ -62,6 +63,14 @@ export function acquire(url) {
     return uri;
 }
 
+function deleteFile(uri) {
+    try {
+        Gio.File.new_for_uri(uri).delete(null);
+    } catch {
+        // Already gone: nothing left to clean up.
+    }
+}
+
 /** Drops a URI returned by acquire(), deleting its file when unused. */
 export function release(uri) {
     const count = refs.get(uri);
@@ -72,16 +81,13 @@ export function release(uri) {
         return;
     }
     refs.delete(uri);
-    try {
-        Gio.File.new_for_uri(uri).delete(null);
-    } catch {}
+    deleteFile(uri);
 }
 
 export function releaseAll() {
-    for (const uri of [...refs.keys()]) {
-        refs.set(uri, 1);
-        release(uri);
-    }
+    for (const uri of refs.keys())
+        deleteFile(uri);
+    refs.clear();
 }
 
 /** Removes files left behind by hosts that crashed. */

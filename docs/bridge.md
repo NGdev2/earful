@@ -10,7 +10,7 @@ GNOME extension.
 
 ## Registration
 
-At login (and when *Browser tabs* is switched on in its settings) Earful
+At login, after unlocking and when *Browser tabs* is switched on, Earful
 writes `io.github.ngdev2.earful.json`, pointing at its own copy of the helper,
 into the folder each installed browser reads
 ([gnome-extension/lib/bridgeSetup.js](../gnome-extension/lib/bridgeSetup.js)):
@@ -92,7 +92,7 @@ emits `PropertiesChanged` (and `Seeked` when the position jumps).
 Host → extension:
 
 ```js
-{type: 'ready', version: '0.2.0'}                 // reply to hello
+{type: 'ready'}                                   // reply to hello
 {type: 'command', tabId: 42, command: 'play' | 'pause' | 'playpause' | 'stop' |
     'next' | 'previous' | 'raise'}
 {type: 'command', tabId: 42, command: 'seek', value: -5}        // relative, seconds

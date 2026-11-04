@@ -314,9 +314,14 @@ async function testRobustness() {
     sendRaw(encoder.encode('{not json'));
     send({type: 'bogus'});
     send({type: 'update', tabId: -4, player: tab({})});
+    send({type: 'update', tabId: 14, player: {title: 42, status: 'Loud', position: 'x', canSeek: 'yes', junk: {}}});
     send({type: 'hello', browser: {name: 'Google Chrome'}});
     equal((await nextMessage())?.type, 'ready', 'host survives malformed messages');
     check(!(await listNames()).some(n => n.includes('tab_-4')), 'invalid tab ids are rejected');
+    check(await waitFor(async () => (await listNames()).includes(busName(14))), 'tab with a malformed state appears');
+    const odd = await props(14, PLAYER);
+    equal([odd.PlaybackStatus, odd.Metadata['xesam:title'], odd.CanSeek, odd.Position], ['Stopped', '', false, 0],
+        'malformed state fields fall back to defaults');
 }
 
 async function testRemoval(artPath) {
