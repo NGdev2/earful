@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Top bar button that lists every player with its own controls.
 
 import Clutter from 'gi://Clutter';
@@ -15,7 +16,7 @@ import {ensureActorVisibleInScrollView} from 'resource:///org/gnome/shell/misc/a
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
 import {SceneLayer} from './scenes.js';
-import {SourceLine, VERTICAL} from './widgets.js';
+import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -45,11 +46,18 @@ class VolumeSlider extends St.BoxLayout {
         this._dragging = false;
         this._updating = false;
 
-        this._icon = new St.Icon({
-            style_class: 'earful-volume-icon',
+        this._icon = new St.Icon({style_class: 'earful-volume-icon'});
+        // Clicking the icon mutes, and clicking again brings the volume back.
+        this._muteButton = new St.Button({
+            style_class: 'earful-volume-mute',
+            can_focus: true,
             y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: _('Mute'),
+            child: this._icon,
         });
-        this.add_child(this._icon);
+        this._muteButton.connect('clicked', () => this._toggleMute());
+        this._unmuteTo = 1;
+        this.add_child(this._muteButton);
 
         this._slider = new Slider.Slider(0);
         this._slider.accessible_name = _('Volume');
@@ -65,7 +73,10 @@ class VolumeSlider extends St.BoxLayout {
             this);
         this.add_child(this._slider);
 
-        this.connect('destroy', () => this._bind(null, []));
+        this.connect('destroy', () => {
+            for (const stream of this._streams)
+                stream.disconnectObject(this);
+        });
     }
 
     bindPlayer(player) {
@@ -126,12 +137,30 @@ class VolumeSlider extends St.BoxLayout {
     _onSliderChanged() {
         if (this._updating)
             return;
-        const {value} = this._slider;
+        this._apply(this._slider.value);
+    }
+
+    _apply(value) {
         if (this._player)
             this._player.setVolume(value);
         else
             this._audio.setVolume(this._streams, value);
         this._syncIcon(value);
+    }
+
+    _toggleMute() {
+        const value = this._read();
+        if (value === null)
+            return;
+        if (value > 0) {
+            this._unmuteTo = value;
+            this._apply(0);
+        } else {
+            this._apply(this._unmuteTo);
+        }
+        this._updating = true;
+        this._slider.value = value > 0 ? 0 : this._unmuteTo;
+        this._updating = false;
     }
 
     _syncIcon(value) {
@@ -143,6 +172,7 @@ class VolumeSlider extends St.BoxLayout {
         else if (value < 2 / 3)
             level = 'medium';
         this._icon.icon_name = `audio-volume-${level}-symbolic`;
+        this._muteButton.accessible_name = value > 0 ? _('Mute') : _('Unmute');
     }
 });
 
@@ -152,8 +182,9 @@ const CARD_RADIUS = 15;
 // Cover size per menu style, in logical pixels.
 const COVER_SIZES = {cards: 64, list: 48, compact: 32};
 
-const PlayerItem = GObject.registerClass(
-class PlayerItem extends PopupMenu.PopupBaseMenuItem {
+const PlayerItem = GObject.registerClass({
+    Signals: {'palette-changed': {}},
+}, class PlayerItem extends PopupMenu.PopupBaseMenuItem {
     _init(player, audio, settings, style) {
         super._init({style_class: `earful-player earful-${style}`});
         this.player = player;
@@ -161,7 +192,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
         this._settings = settings;
         this._style = style;
 
-        this._art = new CoverArt(COVER_SIZES[style], 'earful-art');
+        this._art = new CoverArt(COVER_SIZES[style]);
 
         const text = new St.BoxLayout({
             ...VERTICAL,
@@ -169,8 +200,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'earful-text',
         });
-        // Compact rows have no source line; every widget made here must end
-        // up in the row, so it is destroyed with it.
+        // Compact rows have no source line.
         this._source = style === 'compact' ? null : new SourceLine('earful-source');
         this._title = new St.Label({style_class: 'earful-title'});
         this._artist = new St.Label({style_class: 'earful-artist'});
@@ -218,7 +248,7 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             style_class: 'earful-controls',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        // Compact rows keep it out of sight, but in the row.
+        // Hidden in compact rows, but still in the row so it's destroyed with it.
         this._prev.visible = style !== 'compact';
         controls.add_child(this._prev);
         controls.add_child(this._playPause);
@@ -275,10 +305,12 @@ class PlayerItem extends PopupMenu.PopupBaseMenuItem {
             'changed::design-opacity', () => this._restyle(),
             'changed::animations', () => this._restyle(),
             this);
-        this._art.connect('palette-changed', () => this._restyle());
-        // Painted cards can't use the theme's hover color.
-        // Leaving the screen also ends the hover; restyling then would
-        // start a fade on a widget that is gone.
+        this._art.connect('palette-changed', () => {
+            this._restyle();
+            this.emit('palette-changed');
+        });
+        // Painted cards can't use the theme's hover color. (Leaving the
+        // screen also ends the hover.)
         this.connect('notify::active', () => {
             if (this.get_stage())
                 this._restyle();
@@ -412,11 +444,11 @@ class AudioAppItem extends PopupMenu.PopupBaseMenuItem {
 
 export const EarfulIndicator = GObject.registerClass(
 class EarfulIndicator extends PanelMenu.Button {
-    _init(extension, manager, audio) {
+    _init(extension, settings, manager, audio) {
         super._init(0.5, 'Earful');
 
         this._extension = extension;
-        this._settings = extension.getSettings();
+        this._settings = settings;
         this._manager = manager;
         this._audio = audio;
 
@@ -465,13 +497,11 @@ class EarfulIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         this._focusSwitch = new PopupMenu.PopupSwitchMenuItem(
             _('Focus mode (no popups)'), this._settings.get_boolean('focus-mode'));
-        this._focusSwitch.connect('toggled', (item, state) =>
-            this._settings.set_boolean('focus-mode', state));
+        this._focusSwitch.connect('toggled', (item, state) => this._save('focus-mode', state));
         this.menu.addMenuItem(this._focusSwitch);
         this._labelSwitch = new PopupMenu.PopupSwitchMenuItem(
             _('Show track in top bar'), this._settings.get_boolean('show-panel-label'));
-        this._labelSwitch.connect('toggled', (item, state) =>
-            this._settings.set_boolean('show-panel-label', state));
+        this._labelSwitch.connect('toggled', (item, state) => this._save('show-panel-label', state));
         this.menu.addMenuItem(this._labelSwitch);
         this.menu.addAction(_('Settings'), () => extension.openPreferences());
 
@@ -565,7 +595,7 @@ class EarfulIndicator extends PanelMenu.Button {
         this.menu.box.add_style_class_name(`earful-menu-${style}`);
         for (const player of players) {
             const item = new PlayerItem(player, this._audio, this._settings, style);
-            item._art.connect('palette-changed', () => this._syncBackground());
+            item.connect('palette-changed', () => this._syncBackground());
             item.connect('key-focus-in',
                 () => ensureActorVisibleInScrollView(this._scroll, item));
             this._section.addMenuItem(item);
@@ -586,7 +616,7 @@ class EarfulIndicator extends PanelMenu.Button {
     _fitToScreen() {
         const monitor = Main.layoutManager.findIndexForActor(this);
         const workArea = Main.layoutManager.getWorkAreaForMonitor(monitor);
-        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const scale = scaleFactor();
         const [, menuHeight] = this.menu.box.get_preferred_height(-1);
         const [, listHeight] = this._scroll.get_preferred_height(-1);
         // Room for the rest of the menu and its margins.
@@ -600,7 +630,7 @@ class EarfulIndicator extends PanelMenu.Button {
     _syncBackground() {
         // The current song's colors, or the next one that has a cover.
         const current = this._manager.current;
-        const items = this._section._getMenuItems().filter(i => i.coverPalette !== undefined);
+        const items = this._section._getMenuItems().filter(i => i instanceof PlayerItem);
         const item = items.find(i => i.player === current && i.coverPalette) ??
             items.find(i => i.coverPalette);
         const look = Look.lookFromSettings(this._settings);
@@ -642,6 +672,12 @@ class EarfulIndicator extends PanelMenu.Button {
             }
         }
         this._othersSection.actor.visible = this._otherItems.size > 0;
+    }
+
+    // Since GNOME 47 setToggleState() also emits 'toggled'; only write real changes.
+    _save(key, state) {
+        if (this._settings.get_boolean(key) !== state)
+            this._settings.set_boolean(key, state);
     }
 
     _syncPanel() {

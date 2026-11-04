@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ties sound streams from the shell's mixer (PulseAudio/PipeWire) to
 // players, and lists apps that play sound without being a player.
 
@@ -149,8 +150,6 @@ export class AudioManager extends Signals.EventEmitter {
             'player-added', (m, player) => this._watchPlayer(player),
             'player-removed', () => this._queueUpdate(),
             this);
-        for (const player of playerManager.allPlayers)
-            this._watchPlayer(player);
 
         this._update();
     }

@@ -83,8 +83,8 @@ function cleanup(root) {
     const c = JSON.parse(read(chrome));
     check(c.name === Setup.HOST_NAME && c.path === paths.hostPath && c.type === 'stdio',
         'Chrome manifest points at the host');
-    check(c.allowed_origins?.[0] === `chrome-extension://${Setup.CHROME_EXTENSION_IDS[0]}/` && !c.allowed_extensions,
-        'Chrome manifest allows the add-on');
+    check(JSON.stringify(c.allowed_origins) === JSON.stringify([`chrome-extension://${Setup.CHROME_EXTENSION_ID}/`]) &&
+        !c.allowed_extensions, 'Chrome manifest allows only the add-on', JSON.stringify(c.allowed_origins));
     const f = JSON.parse(read(firefox));
     check(f.allowed_extensions?.[0] === Setup.FIREFOX_EXTENSION_ID && !f.allowed_origins,
         'Firefox manifest allows the add-on');

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Optionally pauses every other player when one starts playing.
 
 import GLib from 'gi://GLib';
@@ -14,8 +15,6 @@ export class PauseOthers {
 
         manager.connectObject('player-added',
             (m, player) => this._watchPlayer(player), this);
-        for (const player of manager.allPlayers)
-            this._watchPlayer(player);
     }
 
     _watchPlayer(player) {

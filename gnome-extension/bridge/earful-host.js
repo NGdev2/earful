@@ -1,45 +1,27 @@
 #!/usr/bin/env -S gjs -m
-// Earful native messaging host: turns the media tabs reported by the
-// Earful browser extension into one MPRIS player each.
-//
-// The browser starts it (Earful registers it, see ../lib/bridgeSetup.js)
-// with stdin/stdout as the native messaging pipe: every message is a 4-byte
-// native-endian length followed by that many bytes of UTF-8 JSON. So nothing
-// here may print to stdout; diagnostics go to stderr, which the browser shows
-// in its own log.
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Earful native messaging host: turns the media tabs reported by the Earful
+// browser add-on into one MPRIS player each. The browser talks to it over
+// stdin/stdout (a 4-byte native-endian length, then UTF-8 JSON), so nothing
+// here may print to stdout; diagnostics go to stderr, the browser's log.
 
 import Gio from 'gi://Gio';
+import GioUnix from 'gi://GioUnix';
 import GLib from 'gi://GLib';
+import GLibUnix from 'gi://GLibUnix';
 
 import * as Artwork from './lib/artwork.js';
 import {TabPlayer} from './lib/tab-player.js';
 
-// GLib 2.80 moved the Unix-only APIs into their own namespaces.
-const GioUnix = await import('gi://GioUnix').then(m => m.default, () => null);
-const GLibUnix = await import('gi://GLibUnix').then(m => m.default, () => null);
-
-// The extension's version-name, from metadata.json one folder up.
-const VERSION = (() => {
-    try {
-        const here = GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]);
-        const [, bytes] = GLib.file_get_contents(GLib.build_filenamev([here, '..', 'metadata.json']));
-        return JSON.parse(new TextDecoder().decode(bytes))['version-name'] ?? 'unknown';
-    } catch {
-        return 'unknown';
-    }
-})();
 const MAX_MESSAGE_SIZE = 64 * 1024 * 1024;
 const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
-const SIGNALS = {SIGHUP: 1, SIGINT: 2, SIGTERM: 15};
+const SIGNALS = [1, 2, 15]; // SIGHUP, SIGINT, SIGTERM
+const signalAdd = GLibUnix.signal_add ?? GLibUnix.signal_add_full; // renamed in GLib 2.88
 
 Gio._promisify(Gio.InputStream.prototype, 'read_bytes_async');
 
-const stdin = GioUnix
-    ? new GioUnix.InputStream({fd: 0, close_fd: false})
-    : new Gio.UnixInputStream({fd: 0, close_fd: false});
-const stdout = GioUnix
-    ? new GioUnix.OutputStream({fd: 1, close_fd: false})
-    : new Gio.UnixOutputStream({fd: 1, close_fd: false});
+const stdin = new GioUnix.InputStream({fd: 0, close_fd: false});
+const stdout = new GioUnix.OutputStream({fd: 1, close_fd: false});
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -52,18 +34,12 @@ const browser = {
     pid: parentPid(),
 };
 
-// The browser process that started us. Chromium's own MPRIS player is
-// called org.mpris.MediaPlayer2.chromium.instance<pid>, so including the pid
-// in our names tells clients which browser's player we replace. (Firefox's
-// is org.mpris.MediaPlayer2.firefox.*; clients match it by name instead.)
+// The browser that started us. Chromium's own player is
+// org.mpris.MediaPlayer2.chromium.instance<pid>; the same pid in our names
+// tells clients which browser's player we replace.
 function parentPid() {
-    try {
-        const [, contents] = GLib.file_get_contents('/proc/self/stat');
-        const fields = decoder.decode(contents).split(') ')[1].split(' ');
-        return Number(fields[1]);
-    } catch {
-        return new Gio.Credentials().get_unix_pid();
-    }
+    const [, contents] = GLib.file_get_contents('/proc/self/stat');
+    return Number(decoder.decode(contents).split(') ')[1].split(' ')[1]);
 }
 
 function readLink(path) {
@@ -144,15 +120,13 @@ function handle(message) {
         browser.name = text(message.browser?.name, 100) || browser.name;
         browser.desktopEntry ||= text(message.browser?.desktopEntry, 100) ||
             (browser.name === 'Firefox' ? firefoxDesktopEntry() : '');
-        // Snap Firefox starts us through the desktop portal, so the parent
-        // pid is the portal's, the same for every Firefox running; our own
-        // pid keeps the names apart. (Clients find Firefox's own player by
-        // its name, not by pid.)
+        // Snap Firefox starts us through the desktop portal, whose pid is the
+        // same for every Firefox; our own pid keeps the names apart.
         if (browser.name === 'Firefox')
             browser.pid = new Gio.Credentials().get_unix_pid();
         for (const player of players.values())
             player.publish();
-        send({type: 'ready', version: VERSION});
+        send({type: 'ready'});
         break;
     case 'update': {
         if (typeof message.player !== 'object' || !message.player)
@@ -200,9 +174,8 @@ function shutdown() {
     loop.quit();
 }
 
-for (const signal of Object.values(SIGNALS)) {
-    const add = GLibUnix?.signal_add_full ?? GLib.unix_signal_add;
-    add(GLib.PRIORITY_DEFAULT, signal, () => {
+for (const signal of SIGNALS) {
+    signalAdd(GLib.PRIORITY_DEFAULT, signal, () => {
         shutdown();
         return GLib.SOURCE_REMOVE;
     });
