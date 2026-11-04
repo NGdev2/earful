@@ -468,12 +468,21 @@ class EarfulIndicator extends PanelMenu.Button {
         this._focusSwitch.connect('toggled', (item, state) =>
             this._settings.set_boolean('focus-mode', state));
         this.menu.addMenuItem(this._focusSwitch);
+        this._labelSwitch = new PopupMenu.PopupSwitchMenuItem(
+            _('Show track in top bar'), this._settings.get_boolean('show-panel-label'));
+        this._labelSwitch.connect('toggled', (item, state) =>
+            this._settings.set_boolean('show-panel-label', state));
+        this.menu.addMenuItem(this._labelSwitch);
         this.menu.addAction(_('Settings'), () => extension.openPreferences());
 
         this._settings.connectObject(
             'changed::focus-mode', () => this._focusSwitch.setToggleState(
                 this._settings.get_boolean('focus-mode')),
-            'changed::show-panel-label', () => this._syncPanel(),
+            'changed::show-panel-label', () => {
+                this._labelSwitch.setToggleState(
+                    this._settings.get_boolean('show-panel-label'));
+                this._syncPanel();
+            },
             'changed::panel-label-max-chars', () => this._syncPanel(),
             'changed::hide-when-idle', () => this._syncPanel(),
             'changed::show-audio-only-apps', () => this._syncOthers(),
