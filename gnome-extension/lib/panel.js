@@ -46,11 +46,18 @@ class VolumeSlider extends St.BoxLayout {
         this._dragging = false;
         this._updating = false;
 
-        this._icon = new St.Icon({
-            style_class: 'earful-volume-icon',
+        this._icon = new St.Icon({style_class: 'earful-volume-icon'});
+        // Clicking the icon mutes, and clicking again brings the volume back.
+        this._muteButton = new St.Button({
+            style_class: 'earful-volume-mute',
+            can_focus: true,
             y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: _('Mute'),
+            child: this._icon,
         });
-        this.add_child(this._icon);
+        this._muteButton.connect('clicked', () => this._toggleMute());
+        this._unmuteTo = 1;
+        this.add_child(this._muteButton);
 
         this._slider = new Slider.Slider(0);
         this._slider.accessible_name = _('Volume');
@@ -130,12 +137,30 @@ class VolumeSlider extends St.BoxLayout {
     _onSliderChanged() {
         if (this._updating)
             return;
-        const {value} = this._slider;
+        this._apply(this._slider.value);
+    }
+
+    _apply(value) {
         if (this._player)
             this._player.setVolume(value);
         else
             this._audio.setVolume(this._streams, value);
         this._syncIcon(value);
+    }
+
+    _toggleMute() {
+        const value = this._read();
+        if (value === null)
+            return;
+        if (value > 0) {
+            this._unmuteTo = value;
+            this._apply(0);
+        } else {
+            this._apply(this._unmuteTo);
+        }
+        this._updating = true;
+        this._slider.value = value > 0 ? 0 : this._unmuteTo;
+        this._updating = false;
     }
 
     _syncIcon(value) {
@@ -147,6 +172,7 @@ class VolumeSlider extends St.BoxLayout {
         else if (value < 2 / 3)
             level = 'medium';
         this._icon.icon_name = `audio-volume-${level}-symbolic`;
+        this._muteButton.accessible_name = value > 0 ? _('Mute') : _('Unmute');
     }
 });
 

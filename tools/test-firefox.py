@@ -264,6 +264,29 @@ def run(gecko, base, wait_seconds):
     gdbus('--dest', name, '--object-path', '/org/mpris/MediaPlayer2', '--method', f'{PLAYER}.PlayPause')
     check(wait_for(lambda: get(name, PLAYER, 'PlaybackStatus') == "(<'Playing'>,)", 10), 'PlayPause resumes')
 
+    # Volume from D-Bus reaches the tab, and the tab reports it back.
+    volume = 'return document.getElementById("audio").volume'
+    print(f'# Volume before: {get(name, PLAYER, "Volume")}', flush=True)
+    gdbus('--dest', name, '--object-path', '/org/mpris/MediaPlayer2',
+          '--method', 'org.freedesktop.DBus.Properties.Set', PLAYER, 'Volume', '<0.4>')
+    check(wait_for(lambda: abs(gecko.call('POST', '/execute/sync', {'script': volume, 'args': []}) - 0.4) < 0.01, 10),
+          'Volume from D-Bus sets the audio element')
+    time.sleep(2)
+    reported = get(name, PLAYER, 'Volume')
+    check(reported == '(<0.40000000000000002>,)' or reported.startswith('(<0.4'),
+          'the tab still reports the new volume', reported)
+    # Muting (volume 0, what the menu's volume icon does) keeps the player.
+    gdbus('--dest', name, '--object-path', '/org/mpris/MediaPlayer2',
+          '--method', 'org.freedesktop.DBus.Properties.Set', PLAYER, 'Volume', '<0.0>')
+    time.sleep(2)
+    check(name in bus_names() and get(name, PLAYER, 'Volume') == '(<0.0>,)'
+          and get(name, PLAYER, 'PlaybackStatus') == "(<'Playing'>,)",
+          'a muted tab stays a playing player', get(name, PLAYER, 'Volume'))
+    gdbus('--dest', name, '--object-path', '/org/mpris/MediaPlayer2',
+          '--method', 'org.freedesktop.DBus.Properties.Set', PLAYER, 'Volume', '<0.4>')
+    check(wait_for(lambda: abs(gecko.call('POST', '/execute/sync', {'script': volume, 'args': []}) - 0.4) < 0.01, 10),
+          'unmuting brings the volume back')
+
     gecko.call('POST', '/url', {'url': 'about:blank'})
     check(wait_for(lambda: name not in bus_names(), 15), 'leaving the page removes the player')
 

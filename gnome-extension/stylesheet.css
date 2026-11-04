@@ -126,6 +126,16 @@
   opacity: 0.7;
 }
 
+.earful-volume-mute {
+  border-radius: 99px;
+  padding: 2px;
+}
+
+.earful-volume-mute:hover .earful-volume-icon,
+.earful-volume-mute:focus .earful-volume-icon {
+  opacity: 1;
+}
+
 .earful-volume .slider {
   height: 16px;
   -barlevel-height: 4px;
