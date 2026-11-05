@@ -10,7 +10,10 @@ import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Ex
 import * as BridgeSetup from './lib/bridgeSetup.js';
 
 // Where to get the Earful Bridge add-on.
-const ADDON_PAGE = 'https://github.com/NGdev2/earful#browser-tabs-as-separate-players-optional';
+const ADDON_PAGES = [
+    [() => _('Chrome, Brave, Edge'), 'https://github.com/NGdev2/earful#browser-tabs-as-separate-players-optional'],
+    [() => _('Firefox'), 'https://addons.mozilla.org/firefox/addon/earful-bridge/'],
+];
 // The shell (re)registers the helper when the switch changes; let it finish first.
 const BRIDGE_REFRESH_DELAY_MS = 800;
 
@@ -294,10 +297,10 @@ export default class EarfulPreferences extends ExtensionPreferences {
         tabs.add(switchRow(settings, 'browser-bridge', _('Show each tab as its own player'),
             _('Lets the add-on start Earful\'s small helper program.')));
         const getAddon = new Adw.ActionRow({title: _('Get the add-on')});
-        for (const label of [_('Chrome, Brave, Edge'), _('Firefox')]) {
-            const button = new Gtk.Button({label, valign: Gtk.Align.CENTER});
+        for (const [label, uri] of ADDON_PAGES) {
+            const button = new Gtk.Button({label: label(), valign: Gtk.Align.CENTER});
             button.connect('clicked', () =>
-                new Gtk.UriLauncher({uri: ADDON_PAGE}).launch(window, null, null));
+                new Gtk.UriLauncher({uri}).launch(window, null, null));
             getAddon.add_suffix(button);
         }
         tabs.add(getAddon);

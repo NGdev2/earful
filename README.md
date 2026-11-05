@@ -35,7 +35,7 @@ It needs GNOME 46 or newer and no sudo: everything goes into your home folder. Y
 Without this, Earful shows your browser as one player. With it, **every tab that plays gets its own row**. Add the free *Earful Bridge* add-on to your browser; Earful sets up everything else by itself.
 
 - **Chrome, Brave, Edge, Vivaldi, Opera:** the add-on is on its way to the Chrome Web Store. Until then, open `chrome://extensions`, turn on *Developer mode*, click *Load unpacked* and choose the folder `~/.local/share/earful/browser-extension` (the install command put it there).
-- **Firefox:** on its way to Firefox Add-ons.
+- **Firefox:** [add Earful Bridge from Firefox Add-ons](https://addons.mozilla.org/firefox/addon/earful-bridge/).
 
 Firefox from Snap asks once whether it may start Earful: choose *Allow*. Browsers installed as Flatpak, and Chromium from Snap, can't use the add-on yet.
 

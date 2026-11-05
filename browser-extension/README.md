@@ -19,11 +19,12 @@ next / previous, volume, and a click that jumps right to the tab.
      **Load unpacked** and pick `~/.local/share/earful/browser-extension`
      (or this folder in a checkout). Its ID is then
      `hlomkcgmmialafamfkkpiamgefhlidll`, the same as in the Chrome Web Store.
-   - **Firefox 140 or newer:** until it's on Firefox Add-ons, run
-     `make firefox`, open `about:debugging#/runtime/this-firefox`, click
-     **Load Temporary Add-on** and pick `dist/firefox-extension/manifest.json`.
-     A temporary add-on is gone after Firefox restarts. The add-on ID is
-     `earful@ngdev2.github.io`.
+   - **Firefox 140 or newer:** add it from
+     [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/earful-bridge/).
+     To try a local build instead, run `make firefox`, open
+     `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**
+     and pick `dist/firefox-extension/manifest.json`. A temporary add-on is
+     gone after Firefox restarts. The add-on ID is `earful@ngdev2.github.io`.
 3. Reload tabs that were already open, or just start something new.
 
 If Earful isn't installed, the add-on opens a short page saying how to get it.

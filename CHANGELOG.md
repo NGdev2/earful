@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3 (2026-11-05)
+
+New
+- Earful Bridge is on [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/earful-bridge/). The Firefox button in Settings, the README and the install message now point there, so Firefox users no longer load it by hand.
+
 ## 0.2.2 (2026-11-04)
 
 New

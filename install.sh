@@ -14,7 +14,7 @@
 main() {
     set -eu
     UUID=earful@NGdev2.github.io
-    REF=${EARFUL_REF:-v0.2.2}
+    REF=${EARFUL_REF:-v0.2.3}
     REPO_URL=https://github.com/NGdev2/earful
     DATA=${XDG_DATA_HOME:-$HOME/.local/share}
     EXT_DIR=$DATA/gnome-shell/extensions/$UUID
@@ -150,6 +150,7 @@ install() {
     say "Optional, browser tabs as separate players: add the Earful Bridge add-on."
     say "  Chrome, Brave, Edge: open chrome://extensions, turn on Developer mode,"
     say "  click Load unpacked and choose $ADDON_DIR"
+    say "  Firefox: https://addons.mozilla.org/firefox/addon/earful-bridge/"
 }
 
 uninstall() {
