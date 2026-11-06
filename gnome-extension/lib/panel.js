@@ -20,6 +20,22 @@ import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+// Only one extension settings window can be open at a time, and GNOME does
+// not raise it when asked again, so it can stay hidden behind other windows.
+function openSettings(extension) {
+    const window = global.display.list_all_windows()
+        .find(w => w.get_wm_class() === 'org.gnome.Shell.Extensions');
+    if (!window) {
+        extension.openPreferences();
+        return;
+    }
+    Main.activateWindow(window);
+    if (window.get_title() !== extension.metadata.name) {
+        Main.notify(_('Settings of “%s” are open').format(window.get_title()),
+            _('Close them to open Earful\'s settings.'));
+    }
+}
+
 function controlButton(iconName, onClick) {
     const button = new St.Button({
         style_class: 'earful-control',
@@ -503,7 +519,7 @@ class EarfulIndicator extends PanelMenu.Button {
             _('Show track in top bar'), this._settings.get_boolean('show-panel-label'));
         this._labelSwitch.connect('toggled', (item, state) => this._save('show-panel-label', state));
         this.menu.addMenuItem(this._labelSwitch);
-        this.menu.addAction(_('Settings'), () => extension.openPreferences());
+        this.menu.addAction(_('Settings'), () => openSettings(extension));
 
         this._settings.connectObject(
             'changed::focus-mode', () => this._focusSwitch.setToggleState(

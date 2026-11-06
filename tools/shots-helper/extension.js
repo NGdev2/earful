@@ -2,11 +2,13 @@
 // opens Earful's menu in every style and design and saves screenshots to
 // $EARFUL_SHOTS, then writes $EARFUL_SHOTS/done. Never install it for real.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const OUT = GLib.getenv('EARFUL_SHOTS');
@@ -53,6 +55,64 @@ export default class ShotsHelper extends Extension {
         window.activate(global.get_current_time());
         await wait(800);
         await shot('prefs');
+        await this._settingsComeBack(window);
+    }
+
+    /** Settings hidden behind another window come back from the menu. */
+    async _settingsComeBack(prefs) {
+        const [, pid] = GLib.spawn_async(null, ['gjs', '-c', `
+            imports.gi.versions.Gtk = '4.0';
+            const {Gtk, GLib} = imports.gi;
+            Gtk.init();
+            new Gtk.Window({title: 'Cover', default_width: 1000, default_height: 700}).present();
+            new GLib.MainLoop(null, false).run();`],
+        null, GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD, null);
+        let cover = null;
+        for (let i = 0; i < 20 && !cover; i++) {
+            await wait(500);
+            cover = global.display.focus_window?.get_title() === 'Cover' ? global.display.focus_window : null;
+        }
+        const notified = [];
+        const source = MessageTray.getSystemSource();
+        const notifyId = source.connect('notification-added', (s, n) => notified.push(n.title));
+        const earful = Main.panel.statusArea['earful@NGdev2.github.io'];
+        const item = earful.menu._getMenuItems().find(i => i.label?.text === 'Settings');
+        item.activate(Clutter.get_current_event());
+        await wait(1500);
+        const settingsWindows = () => global.display.list_all_windows()
+            .filter(w => w.get_wm_class() === 'org.gnome.Shell.Extensions');
+        const result = [
+            `covered ${cover !== null}`,
+            `raised ${global.display.focus_window === prefs}`,
+            `windows ${settingsWindows().length}`,
+            `quiet ${notified.length === 0}`,
+        ];
+        await shot('prefs-after-cover');
+
+        // Another extension's settings are open: they come forward, with a note.
+        prefs.delete(global.display.get_current_time_roundtrip());
+        for (let i = 0; i < 20 && settingsWindows().length; i++)
+            await wait(500);
+        this.openPreferences();
+        let other = null;
+        for (let i = 0; i < 30 && !other; i++) {
+            await wait(500);
+            other = settingsWindows()[0] ?? null;
+        }
+        await wait(1500);
+        Main.activateWindow(global.display.list_all_windows().find(w => w.get_title() === 'Cover'));
+        await wait(800);
+        item.activate(Clutter.get_current_event());
+        await wait(1500);
+        result.push(
+            `other raised ${other !== null && global.display.focus_window === other}`,
+            `noted ${notified[0] === `Settings of “${this.metadata.name}” are open`}`);
+        source.disconnect(notifyId);
+        await shot('prefs-other-extension');
+        other?.delete(global.display.get_current_time_roundtrip());
+        GLib.file_set_contents(`${OUT}/settings-come-back`, result.join('\n'));
+        GLib.spawn_command_line_sync(`kill ${pid}`);
+        GLib.spawn_close_pid(pid);
     }
 
     async _run() {
