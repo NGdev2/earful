@@ -50,7 +50,7 @@ gjs -m "$ROOT/tools/make-covers.js" "$WORK/covers" || exit 1
 EXTENSIONS="['$UUID']"
 if [ -n "$SHOTS" ]; then
     mkdir -p "$SHOTS"
-    rm -f "$SHOTS/done"
+    rm -f "$SHOTS/done" "$SHOTS/settings-come-back"
     cp -r "$ROOT/tools/shots-helper" "$WORK/data/gnome-shell/extensions/earful-shots@test"
     EXTENSIONS="['$UUID', 'earful-shots@test']"
 fi
@@ -106,6 +106,15 @@ for kv in "toast-position bottom-left" "show-panel-label true" \
     sleep 1
 done
 sleep "$STEP"
+if [ -n "$SHOTS" ]; then
+    for _ in $(seq 60); do [ -e "$SHOTS/settings-come-back" ] && break; sleep 1; done
+    check 'grep -qx "covered true" "$SHOTS/settings-come-back"' "settings covered by another window"
+    check 'grep -qx "raised true" "$SHOTS/settings-come-back"' "Settings in the menu brings them back"
+    check 'grep -qx "windows 1" "$SHOTS/settings-come-back"' "still one settings window"
+    check 'grep -qx "quiet true" "$SHOTS/settings-come-back"' "no note for Earful's own settings"
+    check 'grep -qx "other raised true" "$SHOTS/settings-come-back"' "another extension's settings come forward"
+    check 'grep -qx "noted true" "$SHOTS/settings-come-back"' "with a note to close them"
+fi
 gnome-extensions disable "$UUID"; sleep 2
 echo "after disable: $(gnome-extensions info "$UUID" | grep -o 'State: .*')"
 gnome-extensions enable "$UUID"; sleep 2
