@@ -199,8 +199,13 @@ export class Player extends Signals.EventEmitter {
         if (this._cancellable.is_cancelled())
             return;
 
-        this._playerProxy.connectObject('g-properties-changed',
-            () => this._update(), this);
+        this._playerProxy.connectObject('g-properties-changed', (proxy, changed) => {
+            // Most players never announce Position, but use it when one does.
+            const position = changed.lookup_value('Position', null);
+            if (position)
+                this._setPosition(asSeconds(position.deepUnpack()));
+            this._update();
+        }, this);
         this._seekedId = this._playerProxy.connectSignal('Seeked',
             (proxy, sender, [position]) => this._setPosition(asSeconds(position)));
 
@@ -377,9 +382,17 @@ export class Player extends Signals.EventEmitter {
         this._playerProxy?.PreviousAsync().catch(logError);
     }
 
-    /** Whether the bar can be dragged: the player seeks and has a length. */
+    /**
+     * Whether the bar can be dragged: the player seeks, has a length, and
+     * didn't ignore a seek on this track (YouTube ads say they can seek).
+     */
     get canSeek() {
-        return this._canSeek && this.length > 0;
+        return this._canSeek && this.length > 0 &&
+            this._seekRefusedOn !== this._trackRef;
+    }
+
+    get _trackRef() {
+        return `${this.trackKey}\u0001${this.trackId}`;
     }
 
     /** Current position in seconds, counted forward from the last reading. */
@@ -406,11 +419,14 @@ export class Player extends Signals.EventEmitter {
                 new GLib.Variant('(ss)', [PLAYER_IFACE, 'Position']),
                 Gio.DBusCallFlags.NONE, -1, this._cancellable);
             const [position] = reply.recursiveUnpack();
-            if (typeof position === 'number' && Number.isFinite(position))
+            if (typeof position === 'number' && Number.isFinite(position)) {
                 this._setPosition(Math.max(0, position / 1e6));
+                return this.position;
+            }
         } catch {
             // Not every player has a Position; the bar then counts from 0.
         }
+        return null;
     }
 
     /** Jumps to `seconds` in the current track. */
@@ -418,6 +434,7 @@ export class Player extends Signals.EventEmitter {
         if (!this.canSeek || !this._playerProxy)
             return;
         const target = Math.clamp(seconds, 0, this.length);
+        const before = this.position;
         const request = this.trackId
             ? this._playerProxy.SetPositionAsync(this.trackId, Math.round(target * 1e6))
             : this._playerProxy.SeekAsync(Math.round((target - this.position) * 1e6));
@@ -429,6 +446,35 @@ export class Player extends Signals.EventEmitter {
         });
         // Move the bar now; a Seeked signal or the next reading corrects it.
         this._setPosition(target);
+        this._checkSeek(before, target);
+    }
+
+    /**
+     * Some players accept a seek and stay where they were (YouTube during an
+     * ad). Read the position back a moment later; if it didn't move, the bar
+     * snaps back and can't be dragged until the next track.
+     */
+    _checkSeek(before, target) {
+        if (this._seekCheckId)
+            GLib.source_remove(this._seekCheckId);
+        const ref = this._trackRef;
+        const start = GLib.get_monotonic_time();
+        this._seekCheckId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+            this._seekCheckId = 0;
+            this.refreshPosition().then(position => {
+                if (position === null || ref !== this._trackRef)
+                    return;
+                const elapsed = this.status === 'Playing'
+                    ? (GLib.get_monotonic_time() - start) / 1e6 * this.rate : 0;
+                const stayed = Math.abs(position - (before + elapsed)) < 2;
+                const moved = Math.abs(position - (target + elapsed)) < 3;
+                if (stayed && !moved) {
+                    this._seekRefusedOn = ref;
+                    this.emit('changed');
+                }
+            });
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     async setVolume(value) {
@@ -459,6 +505,9 @@ export class Player extends Signals.EventEmitter {
 
     destroy() {
         this._cancellable.cancel();
+        if (this._seekCheckId)
+            GLib.source_remove(this._seekCheckId);
+        this._seekCheckId = 0;
         if (this._seekedId)
             this._playerProxy?.disconnectSignal(this._seekedId);
         this._playerProxy?.disconnectObject(this);

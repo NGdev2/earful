@@ -6,6 +6,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
+import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
@@ -181,6 +182,18 @@ export default class ShotsHelper extends Extension {
         env = GLib.environ_setenv(env, 'FAKE_PLAYER_LOG', log, true);
         GLib.spawn_async(null, ['gjs', '-m', `${GLib.getenv('ROOT')}/tools/fake-player.js`, name, '0'],
             env, GLib.SpawnFlags.SEARCH_PATH, null);
+        // Players that answer a seek differently (see fake-player.js).
+        const modes = {Ad: 'ignore', Silent: 'silent', Announce: 'announce', Long: 'normal'};
+        // A site whose name is a whole sentence must not widen the menu.
+        const longName = `${'Watch films and series online for free in good quality, '.repeat(3)}— Google Chrome`;
+        for (const [extra, mode] of Object.entries(modes)) {
+            let extraEnv = GLib.environ_setenv(GLib.get_environ(), 'FAKE_PLAYER_LENGTH', '240', true);
+            extraEnv = GLib.environ_setenv(extraEnv, 'FAKE_PLAYER_SEEK_MODE', mode, true);
+            if (extra === 'Long')
+                extraEnv = GLib.environ_setenv(extraEnv, 'FAKE_PLAYER_IDENTITY', longName, true);
+            GLib.spawn_async(null, ['gjs', '-m', `${GLib.getenv('ROOT')}/tools/fake-player.js`, extra, '0'],
+                extraEnv, GLib.SpawnFlags.SEARCH_PATH, null);
+        }
         const items = () => earful._section._getMenuItems();
         const itemOf = identity => items().find(i => i.player?.identity === identity);
         const open = async () => {
@@ -193,7 +206,9 @@ export default class ShotsHelper extends Extension {
         };
         try {
             settings.set_string('menu-style', 'cards');
-            for (let i = 0; i < 20 && !this._hasPlayer(earful, name); i++)
+            const ready = () => [name, 'Ad', 'Silent', 'Announce'].every(n => this._hasPlayer(earful, n)) &&
+                earful._manager.players.some(p => p.identity === longName);
+            for (let i = 0; i < 20 && !ready(); i++)
                 await wait(500);
             await wait(1000);
             await open();
@@ -214,8 +229,31 @@ export default class ShotsHelper extends Extension {
             result.push(`seek ${this._seeked(log, name)}`);
             await shot('menu-progress');
 
+            const long = itemOf(longName);
+            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            result.push(`longname ${!!long && long._source._label.width <= 211 * scale}`);
+
             const podcasts = itemOf('Podcasts');
             result.push(`nobar ${!!podcasts?._progress && !podcasts._progress.visible}`);
+
+            // A player that accepts the seek but stays put: the bar snaps
+            // back and can't be dragged any more on this track.
+            const ad = itemOf('Ad');
+            ad?._progress?.seekTo(0.5);
+            await wait(3000);
+            result.push(`refused ${!!ad && ad._progress.slider.reactive === false && ad.player.position < 60}`);
+
+            // A player that announces Position: used before the next reading.
+            const announce = itemOf('Announce');
+            this._setPosition(announce?.player, 'Announce', 100);
+            await wait(700);
+            result.push(`announced ${!!announce && Math.abs(announce.player.position - 100) < 2}`);
+
+            // A player that jumps without telling: the 5 s re-reading finds it.
+            const silent = itemOf('Silent');
+            this._setPosition(silent?.player, 'Silent', 100);
+            await wait(6000);
+            result.push(`reread ${!!silent && Math.abs(silent.player.position - 106) < 3}`);
             await close();
             result.push(`clockstops ${!earful._clockId}`);
 
@@ -238,10 +276,22 @@ export default class ShotsHelper extends Extension {
                 earful.menu.close(false);
         } finally {
             settings.reset('menu-style');
-            Gio.DBus.session.call(`org.mpris.MediaPlayer2.${name}`, '/org/mpris/MediaPlayer2',
-                'org.mpris.MediaPlayer2', 'Quit', null, null, Gio.DBusCallFlags.NONE, -1, null, null);
+            for (const player of [name, ...Object.keys(modes)]) {
+                Gio.DBus.session.call(`org.mpris.MediaPlayer2.${player}`, '/org/mpris/MediaPlayer2',
+                    'org.mpris.MediaPlayer2', 'Quit', null, null, Gio.DBusCallFlags.NONE, -1, null, null);
+            }
             GLib.file_set_contents(`${OUT}/progress`, result.join('\n'));
         }
+    }
+
+    /** Seeks a fake player directly over D-Bus, behind Earful's back. */
+    _setPosition(player, busName, seconds) {
+        if (!player)
+            return;
+        Gio.DBus.session.call(`org.mpris.MediaPlayer2.${busName}`, '/org/mpris/MediaPlayer2',
+            'org.mpris.MediaPlayer2.Player', 'SetPosition',
+            new GLib.Variant('(ox)', [player.trackId, Math.round(seconds * 1e6)]),
+            null, Gio.DBusCallFlags.NONE, -1, null, null);
     }
 
     _hasPlayer(earful, identity) {

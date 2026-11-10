@@ -17,6 +17,10 @@
 //                        are then ignored
 //   FAKE_PLAYER_LOG      file that gets a line per SetPosition / Seek call:
 //                        "setposition <seconds>" / "seek <seconds>"
+//   FAKE_PLAYER_SEEK_MODE how a seek is answered: "normal" (move, emit
+//                        Seeked), "ignore" (stay put, like YouTube during an
+//                        ad), "silent" (move without Seeked) or "announce"
+//                        (move and announce Position instead of Seeked)
 //
 // For demos, these make it look like a real player:
 //   FAKE_PLAYER_BUS       bus name suffix, e.g. earful_tab_7.instance42
@@ -34,6 +38,7 @@ const hasVolume = !GLib.getenv('FAKE_PLAYER_NO_VOLUME');
 const canSeek = !GLib.getenv('FAKE_PLAYER_NO_SEEK');
 const logFile = GLib.getenv('FAKE_PLAYER_LOG');
 const lengthEnv = GLib.getenv('FAKE_PLAYER_LENGTH');
+const seekMode = GLib.getenv('FAKE_PLAYER_SEEK_MODE') ?? 'normal';
 // Lengths in seconds when tracks don't auto-advance, so demos look real.
 const LENGTHS = [214, 187, 243, 198, 165];
 
@@ -153,8 +158,14 @@ function logCall(line) {
     stream.close(null);
 }
 
+/** Tells about a jump the way FAKE_PLAYER_SEEK_MODE says. */
 function seeked() {
-    exportedPlayer.emit_signal('Seeked', new GLib.Variant('(x)', [position()]));
+    if (seekMode === 'silent')
+        return;
+    if (seekMode === 'announce')
+        exportedPlayer.emit_property_changed('Position', new GLib.Variant('x', position()));
+    else
+        exportedPlayer.emit_signal('Seeked', new GLib.Variant('(x)', [position()]));
     exportedPlayer.flush();
 }
 
@@ -236,7 +247,7 @@ const player = {
     SetPosition(id, value) {
         logCall(`setposition ${value / 1e6}`);
         // A stale track id means the request was for an earlier track.
-        if (!canSeek || id !== trackId())
+        if (!canSeek || id !== trackId() || seekMode === 'ignore')
             return;
         const length = trackLength();
         setPositionValue(length > 0 ? Math.min(value, length) : value);
@@ -245,7 +256,7 @@ const player = {
     },
     Seek(offset) {
         logCall(`seek ${offset / 1e6}`);
-        if (!canSeek)
+        if (!canSeek || seekMode === 'ignore')
             return;
         const target = position() + offset;
         const length = trackLength();

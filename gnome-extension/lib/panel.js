@@ -734,7 +734,13 @@ class EarfulIndicator extends PanelMenu.Button {
         if (open && !this._clockId) {
             for (const player of this._manager.players)
                 player.refreshPosition();
+            this._clockTicks = 0;
             this._clockId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+                // Ask again every 5 s, for players that jump without saying so.
+                if (++this._clockTicks % 5 === 0) {
+                    for (const player of this._manager.players)
+                        player.refreshPosition();
+                }
                 for (const item of this._section._getMenuItems()) {
                     if (item instanceof PlayerItem)
                         item.tick();

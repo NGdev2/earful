@@ -121,7 +121,11 @@ class SourceLine extends St.BoxLayout {
             style_class: `${styleClass}-icon`,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._label = new St.Label({y_align: Clutter.ActorAlign.CENTER});
+        // Site names can be a whole sentence; the label is cut with "…".
+        this._label = new St.Label({
+            style_class: `${styleClass}-name`,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
         this._equalizer = new Equalizer();
         this.add_child(this._icon);
         this.add_child(this._label);

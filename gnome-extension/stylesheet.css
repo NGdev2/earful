@@ -52,6 +52,15 @@
   icon-size: 14px;
 }
 
+/* Long site names end in "…" instead of widening the menu. */
+.earful-source-name {
+  max-width: 180px;
+}
+
+.earful-cards .earful-source-name {
+  max-width: 210px;
+}
+
 .earful-title {
   max-width: 220px;
 }
