@@ -165,6 +165,110 @@ export default class ShotsHelper extends Extension {
         settings.reset('toast-shadow');
         settings.reset('design');
         await this._closePopup(settings);
+        await this._progress(earful);
+    }
+
+    /** The progress bar: it shows, moves, seeks, and only where it should. */
+    async _progress(earful) {
+        const settings = earful._settings;
+        const result = [];
+        // A player of its own: Spotify's 2 s tracks would reset the bar.
+        const name = 'Progress';
+        const log = `${OUT}/progress-calls.log`;
+        GLib.unlink(log);
+        let env = GLib.get_environ();
+        env = GLib.environ_setenv(env, 'FAKE_PLAYER_LENGTH', '240', true);
+        env = GLib.environ_setenv(env, 'FAKE_PLAYER_LOG', log, true);
+        GLib.spawn_async(null, ['gjs', '-m', `${GLib.getenv('ROOT')}/tools/fake-player.js`, name, '0'],
+            env, GLib.SpawnFlags.SEARCH_PATH, null);
+        const items = () => earful._section._getMenuItems();
+        const itemOf = identity => items().find(i => i.player?.identity === identity);
+        const open = async () => {
+            earful.menu.open(false);
+            await wait(1500);
+        };
+        const close = async () => {
+            earful.menu.close(false);
+            await wait(600);
+        };
+        try {
+            settings.set_string('menu-style', 'cards');
+            for (let i = 0; i < 20 && !this._hasPlayer(earful, name); i++)
+                await wait(500);
+            await wait(1000);
+            await open();
+            const item = itemOf(name) ?? items().find(i => i._progress?._player?.length > 0);
+            const bar = item?._progress;
+            result.push(`shown ${bar?.visible === true}`);
+            result.push(`length ${bar?.lengthLabel?.text ?? ''}`);
+            result.push(`clockruns ${!!earful._clockId}`);
+
+            const elapsed = bar?.elapsedLabel?.text;
+            const position = item?.player?.position ?? 0;
+            await wait(2200);
+            result.push(`advances ${!!bar && (bar.elapsedLabel.text !== elapsed ||
+                item.player.position > position)}`);
+
+            bar?.seekTo(0.5);
+            await wait(1200);
+            result.push(`seek ${this._seeked(log, name)}`);
+            await shot('menu-progress');
+
+            const podcasts = itemOf('Podcasts');
+            result.push(`nobar ${!!podcasts?._progress && !podcasts._progress.visible}`);
+            await close();
+            result.push(`clockstops ${!earful._clockId}`);
+
+            for (const style of ['list', 'compact']) {
+                settings.set_string('menu-style', style);
+                await wait(600);
+                await open();
+                const row = itemOf(name);
+                if (style === 'list')
+                    result.push(`list ${row?._progress?.visible === true}`);
+                else
+                    result.push(`compact ${!!row && row._progress === null}`);
+                await shot(`menu-progress-${style}`);
+                await close();
+            }
+        } catch (e) {
+            logError(e, 'earful-shots');
+            result.push(`error ${e.message}`);
+            if (earful.menu.isOpen)
+                earful.menu.close(false);
+        } finally {
+            settings.reset('menu-style');
+            Gio.DBus.session.call(`org.mpris.MediaPlayer2.${name}`, '/org/mpris/MediaPlayer2',
+                'org.mpris.MediaPlayer2', 'Quit', null, null, Gio.DBusCallFlags.NONE, -1, null, null);
+            GLib.file_set_contents(`${OUT}/progress`, result.join('\n'));
+        }
+    }
+
+    _hasPlayer(earful, identity) {
+        return earful._manager.players.some(p => p.identity === identity);
+    }
+
+    /**
+     * Whether the seek reached the player: a SetPosition near the middle was
+     * sent, and the player accepted it (right track id), so its own Position
+     * is near the middle too.
+     */
+    _seeked(log, name) {
+        let asked = [];
+        try {
+            const [, contents] = GLib.file_get_contents(log);
+            asked = new TextDecoder().decode(contents).split('\n')
+                .filter(l => l.startsWith('setposition '))
+                .map(l => Number(l.split(' ')[1]));
+        } catch {
+            return false;
+        }
+        const reply = Gio.DBus.session.call_sync(`org.mpris.MediaPlayer2.${name}`,
+            '/org/mpris/MediaPlayer2', 'org.freedesktop.DBus.Properties', 'Get',
+            new GLib.Variant('(ss)', ['org.mpris.MediaPlayer2.Player', 'Position']),
+            null, Gio.DBusCallFlags.NONE, 2000, null);
+        const [value] = reply.recursiveUnpack();
+        return asked.some(s => Math.abs(s - 120) < 2) && Math.abs(value / 1e6 - 120) < 3;
     }
 
     /** The ✕ on a popup closes it without raising the player. */

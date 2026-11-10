@@ -15,6 +15,7 @@ import {ensureActorVisibleInScrollView} from 'resource:///org/gnome/shell/misc/a
 
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
+import {ProgressBar} from './progress.js';
 import {SceneLayer} from './scenes.js';
 import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
@@ -271,6 +272,8 @@ const PlayerItem = GObject.registerClass({
         controls.add_child(this._next);
 
         this._volume = style === 'compact' ? null : new VolumeSlider(audio);
+        // Elapsed time, bar and length; compact rows have no sliders.
+        this._progress = style === 'compact' ? null : new ProgressBar();
 
         if (style === 'cards') {
             // Cover and text on top; volume and controls share the row below.
@@ -286,6 +289,7 @@ const PlayerItem = GObject.registerClass({
             controls.x_align = Clutter.ActorAlign.END;
             bottom.add_child(controls);
             column.add_child(top);
+            column.add_child(this._progress);
             column.add_child(bottom);
             // The design's scene lies under the content, edge to edge.
             column.style_class = 'earful-card-content';
@@ -300,6 +304,8 @@ const PlayerItem = GObject.registerClass({
         } else {
             if (this._volume)
                 text.add_child(this._volume);
+            if (this._progress)
+                text.add_child(this._progress);
             this.add_child(this._art);
             this.add_child(text);
             this.add_child(this._pin);
@@ -331,8 +337,14 @@ const PlayerItem = GObject.registerClass({
             if (this.get_stage())
                 this._restyle();
         });
+        this._progress?.bindPlayer(player);
         this._sync();
         this._syncPin();
+    }
+
+    /** Called once a second while the menu is open. */
+    tick() {
+        this._progress?.tick();
     }
 
     _restyle() {
@@ -345,6 +357,7 @@ const PlayerItem = GObject.registerClass({
             else
                 this.remove_style_class_name('earful-painted');
             this._volume.setSliderStyle(Look.sliderStyle(look, palette));
+            this._progress.setSliderStyle(Look.sliderStyle(look, palette));
             this._scene.update(look, palette, this.player.isPlaying);
         }
         this._source?.update(this.player, look.animate, Look.accentColor(look, palette));
@@ -553,6 +566,7 @@ class EarfulIndicator extends PanelMenu.Button {
             this._syncOthers();
             if (open)
                 this._fitToScreen();
+            this._syncClock(open);
         }, this);
 
         this._rebuild();
@@ -715,9 +729,28 @@ class EarfulIndicator extends PanelMenu.Button {
         this._label.visible = text !== '';
     }
 
+    /** Progress bars move once a second, only while the menu is open. */
+    _syncClock(open) {
+        if (open && !this._clockId) {
+            for (const player of this._manager.players)
+                player.refreshPosition();
+            this._clockId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+                for (const item of this._section._getMenuItems()) {
+                    if (item instanceof PlayerItem)
+                        item.tick();
+                }
+                return GLib.SOURCE_CONTINUE;
+            });
+        } else if (!open && this._clockId) {
+            GLib.source_remove(this._clockId);
+            this._clockId = 0;
+        }
+    }
+
     destroy() {
         if (this._rebuildId)
             GLib.source_remove(this._rebuildId);
+        this._syncClock(false);
         this._settings.disconnectObject(this);
         this._manager.disconnectObject(this);
         this._audio.disconnectObject(this);

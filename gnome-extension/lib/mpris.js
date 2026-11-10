@@ -49,12 +49,24 @@ const MprisPlayerIface = `
     <method name="Next"/>
     <method name="Previous"/>
     <method name="Stop"/>
+    <method name="Seek">
+      <arg type="x" direction="in" name="Offset"/>
+    </method>
+    <method name="SetPosition">
+      <arg type="o" direction="in" name="TrackId"/>
+      <arg type="x" direction="in" name="Position"/>
+    </method>
+    <signal name="Seeked">
+      <arg type="x" name="Position"/>
+    </signal>
     <property name="PlaybackStatus" type="s" access="read"/>
     <property name="Metadata" type="a{sv}" access="read"/>
     <property name="CanGoNext" type="b" access="read"/>
     <property name="CanGoPrevious" type="b" access="read"/>
     <property name="CanControl" type="b" access="read"/>
     <property name="Volume" type="d" access="readwrite"/>
+    <property name="Rate" type="d" access="read"/>
+    <property name="CanSeek" type="b" access="read"/>
   </interface>
 </node>`;
 
@@ -91,6 +103,20 @@ function titleFromUrl(url) {
     return name.replace(/\.[a-z0-9]{1,5}$/i, '');
 }
 
+/** A number in microseconds (players send x, t, i or d) as seconds; 0 if unusable. */
+function asSeconds(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n / 1e6 : 0;
+}
+
+// The MPRIS "no track" id, and ids that are not object paths, can't be used
+// with SetPosition; those players get Seek instead.
+const NO_TRACK = '/org/mpris/MediaPlayer2/TrackList/NoTrack';
+function asTrackId(value) {
+    return typeof value === 'string' && value !== NO_TRACK &&
+        GLib.Variant.is_object_path(value) ? value : '';
+}
+
 function asStringList(value) {
     if (typeof value === 'string')
         return [value];
@@ -107,6 +133,7 @@ function asStringList(value) {
  *  - 'track-changed': a new track started playing (worth announcing)
  *  - 'started': playback went from not playing to playing
  *  - 'closed': the player went away
+ *  - 'position-changed': the position jumped (seek, fresh read, new track)
  */
 export class Player extends Signals.EventEmitter {
     constructor(busName, {announce}) {
@@ -128,6 +155,15 @@ export class Player extends Signals.EventEmitter {
         this.startedAt = 0;
         // MPRIS volume (0..1), only when the player really lets us set it.
         this.volume = null;
+        // Track length in seconds; 0 when unknown (live streams, some players).
+        this.length = 0;
+        this.trackId = '';
+        this.rate = 1;
+        this._canSeek = false;
+        // Players rarely announce Position, so it is read now and then and
+        // counted forward locally: base + time since base, times the rate.
+        this._positionBase = 0;
+        this._positionTime = GLib.get_monotonic_time();
         // Hidden from the list by the user until it plays or changes track.
         this.dismissed = false;
 
@@ -165,8 +201,11 @@ export class Player extends Signals.EventEmitter {
 
         this._playerProxy.connectObject('g-properties-changed',
             () => this._update(), this);
+        this._seekedId = this._playerProxy.connectSignal('Seeked',
+            (proxy, sender, [position]) => this._setPosition(asSeconds(position)));
 
         this._update();
+        this.refreshPosition();
     }
 
     async _findAppByPid() {
@@ -244,7 +283,19 @@ export class Player extends Signals.EventEmitter {
             metadata[key] = value.deepUnpack();
 
         const wasPlaying = this.isPlaying;
-        this.status = proxy.PlaybackStatus ?? 'Stopped';
+        const oldStatus = this.status, oldRate = this.rate;
+        // Freeze the counted position before the status or rate changes it.
+        const status = proxy.PlaybackStatus ?? 'Stopped';
+        const rate = typeof proxy.Rate === 'number' && proxy.Rate > 0 ? proxy.Rate : 1;
+        if (status !== oldStatus || rate !== oldRate) {
+            this._positionBase = this.position;
+            this._positionTime = GLib.get_monotonic_time();
+        }
+        this.status = status;
+        this.rate = rate;
+        this.length = asSeconds(metadata['mpris:length']);
+        const trackId = asTrackId(metadata['mpris:trackid']);
+        this._canSeek = proxy.CanSeek === true;
         // VLC sends only the file's URL for files without tags.
         this.title = asString(metadata['xesam:title']) ||
             titleFromUrl(asString(metadata['xesam:url']));
@@ -273,10 +324,18 @@ export class Player extends Signals.EventEmitter {
         // A hidden player comes back as soon as it plays something.
         if (this.dismissed && (this.isPlaying || key !== this.trackKey))
             this.dismissed = false;
+        const newTrack = (key && key !== this.trackKey) || trackId !== this.trackId;
+        this.trackId = trackId;
         if (key && key !== this.trackKey) {
             this.trackKey = key;
             this._pendingAnnounce = this._initialized || this._announce;
         }
+        if (newTrack) {
+            this._positionBase = 0;
+            this._positionTime = GLib.get_monotonic_time();
+        }
+        if (this._initialized && (newTrack || status !== oldStatus || rate !== oldRate))
+            this.refreshPosition();
         this._initialized = true;
 
         // Announce a new track once it actually plays, so pausing,
@@ -318,6 +377,60 @@ export class Player extends Signals.EventEmitter {
         this._playerProxy?.PreviousAsync().catch(logError);
     }
 
+    /** Whether the bar can be dragged: the player seeks and has a length. */
+    get canSeek() {
+        return this._canSeek && this.length > 0;
+    }
+
+    /** Current position in seconds, counted forward from the last reading. */
+    get position() {
+        let seconds = this._positionBase;
+        if (this.status === 'Playing')
+            seconds += (GLib.get_monotonic_time() - this._positionTime) / 1e6 * this.rate;
+        seconds = Math.max(0, seconds);
+        return this.length > 0 ? Math.min(seconds, this.length) : seconds;
+    }
+
+    _setPosition(seconds) {
+        this._positionBase = seconds;
+        this._positionTime = GLib.get_monotonic_time();
+        this.emit('position-changed');
+    }
+
+    /** Reads Position from the player (it is not announced when it moves). */
+    async refreshPosition() {
+        if (!this._playerProxy)
+            return;
+        try {
+            const reply = await this._playerProxy.call('org.freedesktop.DBus.Properties.Get',
+                new GLib.Variant('(ss)', [PLAYER_IFACE, 'Position']),
+                Gio.DBusCallFlags.NONE, -1, this._cancellable);
+            const [position] = reply.recursiveUnpack();
+            if (typeof position === 'number' && Number.isFinite(position))
+                this._setPosition(Math.max(0, position / 1e6));
+        } catch {
+            // Not every player has a Position; the bar then counts from 0.
+        }
+    }
+
+    /** Jumps to `seconds` in the current track. */
+    setPosition(seconds) {
+        if (!this.canSeek || !this._playerProxy)
+            return;
+        const target = Math.clamp(seconds, 0, this.length);
+        const request = this.trackId
+            ? this._playerProxy.SetPositionAsync(this.trackId, Math.round(target * 1e6))
+            : this._playerProxy.SeekAsync(Math.round((target - this.position) * 1e6));
+        request.catch(e => {
+            if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED) || this._seekFailed)
+                return;
+            this._seekFailed = true;
+            logError(e, `Earful: ${this.busName} refused to seek`);
+        });
+        // Move the bar now; a Seeked signal or the next reading corrects it.
+        this._setPosition(target);
+    }
+
     async setVolume(value) {
         if (this.volume === null)
             return;
@@ -346,6 +459,8 @@ export class Player extends Signals.EventEmitter {
 
     destroy() {
         this._cancellable.cancel();
+        if (this._seekedId)
+            this._playerProxy?.disconnectSignal(this._seekedId);
         this._playerProxy?.disconnectObject(this);
         this._mprisProxy = null;
         this._playerProxy = null;

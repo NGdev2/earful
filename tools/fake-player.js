@@ -9,6 +9,15 @@
 // Set FAKE_PLAYER_NO_VOLUME=1 to leave out the MPRIS Volume property, like
 // players whose volume Earful has to find in the sound mixer.
 //
+// Track length and seeking:
+//   FAKE_PLAYER_LENGTH   track length in seconds; 0 leaves out mpris:length,
+//                        like a live stream (default: seconds-per-track, or
+//                        a few minutes per track when that is 0)
+//   FAKE_PLAYER_NO_SEEK  set to 1 for CanSeek false; SetPosition and Seek
+//                        are then ignored
+//   FAKE_PLAYER_LOG      file that gets a line per SetPosition / Seek call:
+//                        "setposition <seconds>" / "seek <seconds>"
+//
 // For demos, these make it look like a real player:
 //   FAKE_PLAYER_BUS       bus name suffix, e.g. earful_tab_7.instance42
 //   FAKE_PLAYER_IDENTITY  e.g. "YouTube — Google Chrome"
@@ -22,6 +31,11 @@ import {programArgs} from 'system';
 const [name = 'FakePlayer', secondsArg = '8', artDir = ''] = programArgs;
 const seconds = Number(secondsArg);
 const hasVolume = !GLib.getenv('FAKE_PLAYER_NO_VOLUME');
+const canSeek = !GLib.getenv('FAKE_PLAYER_NO_SEEK');
+const logFile = GLib.getenv('FAKE_PLAYER_LOG');
+const lengthEnv = GLib.getenv('FAKE_PLAYER_LENGTH');
+// Lengths in seconds when tracks don't auto-advance, so demos look real.
+const LENGTHS = [214, 187, 243, 198, 165];
 
 let TRACKS = [
     ['Midnight Compiler', 'The Semicolons', 'Build Passing'],
@@ -78,6 +92,19 @@ const PLAYER_IFACE = `
     <property name="CanPlay" type="b" access="read"/>
     <property name="CanPause" type="b" access="read"/>
     <property name="CanControl" type="b" access="read"/>
+    <property name="CanSeek" type="b" access="read"/>
+    <property name="Position" type="x" access="read"/>
+    <property name="Rate" type="d" access="read"/>
+    <method name="SetPosition">
+      <arg name="TrackId" type="o" direction="in"/>
+      <arg name="Position" type="x" direction="in"/>
+    </method>
+    <method name="Seek">
+      <arg name="Offset" type="x" direction="in"/>
+    </method>
+    <signal name="Seeked">
+      <arg name="Position" type="x"/>
+    </signal>
     ${hasVolume ? '<property name="Volume" type="d" access="readwrite"/>' : ''}
   </interface>
 </node>`;
@@ -85,6 +112,51 @@ const PLAYER_IFACE = `
 let index = 0;
 let status = 'Playing';
 let volume = 1.0;
+// Position in microseconds: where it was at positionTime (monotonic µs),
+// moving on from there while playing.
+let positionBase = 0;
+let positionTime = GLib.get_monotonic_time();
+
+/** The current track's length in microseconds, 0 if unknown. */
+function trackLength() {
+    let length;
+    if (lengthEnv !== null)
+        length = Number(lengthEnv);
+    else
+        length = seconds > 0 ? seconds : LENGTHS[index % LENGTHS.length];
+    return Math.max(0, Math.round(length * 1e6)) || 0;
+}
+
+function trackId() {
+    return `/org/earful/fake/track${index}`;
+}
+
+function position() {
+    let value = positionBase;
+    if (status === 'Playing')
+        value += GLib.get_monotonic_time() - positionTime;
+    const length = trackLength();
+    return length > 0 ? Math.min(value, length) : value;
+}
+
+function setPositionValue(value) {
+    positionBase = Math.max(0, value);
+    positionTime = GLib.get_monotonic_time();
+}
+
+function logCall(line) {
+    if (!logFile)
+        return;
+    const stream = Gio.File.new_for_path(logFile)
+        .append_to(Gio.FileCreateFlags.NONE, null);
+    stream.write_all(new TextEncoder().encode(`${line}\n`), null);
+    stream.close(null);
+}
+
+function seeked() {
+    exportedPlayer.emit_signal('Seeked', new GLib.Variant('(x)', [position()]));
+    exportedPlayer.flush();
+}
 
 const player = {
     CanRaise: true,
@@ -99,6 +171,12 @@ const player = {
     CanPlay: true,
     CanPause: true,
     CanControl: true,
+    CanSeek: canSeek,
+    Rate: 1.0,
+
+    get Position() {
+        return position();
+    },
 
     get Volume() {
         return volume;
@@ -117,7 +195,7 @@ const player = {
     get Metadata() {
         const [title, artist, album] = TRACKS[index % TRACKS.length];
         const metadata = {
-            'mpris:trackid': new GLib.Variant('o', `/fake/track/${index}`),
+            'mpris:trackid': new GLib.Variant('o', trackId()),
             'xesam:title': new GLib.Variant('s', title),
             'xesam:artist': new GLib.Variant('as', [artist]),
             'xesam:album': new GLib.Variant('s', album),
@@ -125,6 +203,9 @@ const player = {
         const cover = covers.length ? covers[index % covers.length] : '';
         if (cover)
             metadata['mpris:artUrl'] = new GLib.Variant('s', cover);
+        const length = trackLength();
+        if (length > 0)
+            metadata['mpris:length'] = new GLib.Variant('x', length);
         return metadata;
     },
 
@@ -152,6 +233,31 @@ const player = {
     Previous() {
         changeTrack(-1);
     },
+    SetPosition(id, value) {
+        logCall(`setposition ${value / 1e6}`);
+        // A stale track id means the request was for an earlier track.
+        if (!canSeek || id !== trackId())
+            return;
+        const length = trackLength();
+        setPositionValue(length > 0 ? Math.min(value, length) : value);
+        print(`${name}: position ${(position() / 1e6).toFixed(1)}`);
+        seeked();
+    },
+    Seek(offset) {
+        logCall(`seek ${offset / 1e6}`);
+        if (!canSeek)
+            return;
+        const target = position() + offset;
+        const length = trackLength();
+        // Past the end goes to the next track, as the MPRIS spec says.
+        if (length > 0 && target > length) {
+            changeTrack(1);
+            return;
+        }
+        setPositionValue(target);
+        print(`${name}: position ${(position() / 1e6).toFixed(1)}`);
+        seeked();
+    },
 };
 
 const exportedRoot = Gio.DBusExportedObject.wrapJSObject(ROOT_IFACE, player);
@@ -172,6 +278,8 @@ function notify(props) {
 }
 
 function setStatus(newStatus) {
+    // Keep the position where it is when playback pauses or resumes.
+    setPositionValue(newStatus === 'Stopped' ? 0 : position());
     status = newStatus;
     print(`${name}: ${status}`);
     notify(['PlaybackStatus']);
@@ -179,6 +287,7 @@ function setStatus(newStatus) {
 
 function changeTrack(delta) {
     index = (index + delta + TRACKS.length) % TRACKS.length;
+    setPositionValue(0);
     print(`${name}: ${TRACKS[index][0]}`);
     notify(['Metadata']);
 }

@@ -50,7 +50,8 @@ gjs -m "$ROOT/tools/make-covers.js" "$WORK/covers" || exit 1
 EXTENSIONS="['$UUID']"
 if [ -n "$SHOTS" ]; then
     mkdir -p "$SHOTS"
-    rm -f "$SHOTS/done" "$SHOTS/settings-come-back" "$SHOTS/popup-close"
+    rm -f "$SHOTS/done" "$SHOTS/settings-come-back" "$SHOTS/popup-close" \
+          "$SHOTS/progress" "$SHOTS/progress-calls.log"
     cp -r "$ROOT/tools/shots-helper" "$WORK/data/gnome-shell/extensions/earful-shots@test"
     EXTENSIONS="['$UUID', 'earful-shots@test']"
 fi
@@ -90,12 +91,15 @@ prefs_up() {
 for _ in $(seq 15); do prefs_up && break; sleep 1; done
 sleep 3
 check prefs_up "settings window running"
-gjs -m "$ROOT/tools/fake-player.js" Spotify 2 "$WORK/covers" >/dev/null 2>&1 &
-gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2>&1 &
+# Spotify changes track every 2 s (for popups) but has 4 min tracks; the
+# podcast is a live stream, without a length. (The progress bar test uses a
+# player of its own that doesn't skip.)
+FAKE_PLAYER_LENGTH=240 gjs -m "$ROOT/tools/fake-player.js" Spotify 2 "$WORK/covers" >/dev/null 2>&1 &
+FAKE_PLAYER_LENGTH=0 gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2>&1 &
 P2=$!
 sleep "$STEP"
 if [ -n "$SHOTS" ]; then
-    for _ in $(seq 100); do [ -e "$SHOTS/done" ] && break; sleep 1; done
+    for _ in $(seq 140); do [ -e "$SHOTS/done" ] && break; sleep 1; done
     rm -f "$SHOTS/done"
 fi
 for kv in "toast-position bottom-left" "show-panel-label true" \
@@ -119,6 +123,16 @@ if [ -n "$SHOTS" ]; then
     check 'grep -qx "closing true" "$SHOTS/popup-close"' "the close button closes the popup"
     check 'grep -qx "raised false" "$SHOTS/popup-close"' "without raising the player"
     check 'grep -qx "gone true" "$SHOTS/popup-close"' "and the popup is gone"
+    P="$SHOTS/progress"
+    check 'grep -qx "shown true" "$P" && grep -qx "length 4:00" "$P"' "progress bar shows for a player with a length"
+    check 'grep -qx "advances true" "$P"' "elapsed time advances"
+    check 'grep -qx "seek true" "$P"' "dragging the bar seeks the player"
+    check 'grep -qx "nobar true" "$P"' "no bar for a player without a length"
+    check 'grep -qx "clockruns true" "$P"' "the progress clock runs while the menu is open"
+    check 'grep -qx "clockstops true" "$P"' "the progress clock stops when the menu closes"
+    check 'grep -qx "list true" "$P"' "list rows show progress"
+    check 'grep -qx "compact true" "$P"' "compact rows have no progress"
+    check '! grep -q "^error" "$P"' "progress test ran without errors"
 fi
 gnome-extensions disable "$UUID"; sleep 2
 echo "after disable: $(gnome-extensions info "$UUID" | grep -o 'State: .*')"
@@ -134,7 +148,7 @@ env -u DISPLAY "$MARKER" EXT="$EXT" UUID="$UUID" EXTENSIONS="$EXTENSIONS" \
     SHOTS="$SHOTS" EARFUL_SHOTS="$SHOTS" ROOT="$ROOT" WORK="$WORK" STEP="$STEP" \
     PATH="$WORK/bin:$PATH" HOME="$WORK/home" WAYLAND_DISPLAY="$WL" GDK_BACKEND=wayland \
     XDG_DATA_HOME="$WORK/data" XDG_CONFIG_HOME="$WORK/config" XDG_CACHE_HOME="$WORK/cache" \
-    timeout 200 dbus-run-session -- bash "$WORK/scenario.sh" 2>"$WORK/bus.log"
+    timeout 260 dbus-run-session -- bash "$WORK/scenario.sh" 2>"$WORK/bus.log"
 
 [ -n "$SHOTS" ] && cp "$WORK/shell.log" "$WORK/bus.log" "$SHOTS/"
 [ -n "${KEEP_LOGS:-}" ] && mkdir -p "$KEEP_LOGS" && cp "$WORK/shell.log" "$WORK/bus.log" "$KEEP_LOGS/"

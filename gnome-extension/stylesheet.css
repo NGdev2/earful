@@ -142,6 +142,33 @@
   -slider-handle-radius: 7px;
 }
 
+/* Track progress: elapsed time, bar, length */
+.earful-progress {
+  spacing: 8px;
+  padding-top: 4px;
+}
+
+.earful-progress-time {
+  font-size: 0.8em;
+  font-feature-settings: "tnum";
+  opacity: 0.75;
+  min-width: 2.6em;
+}
+
+.earful-progress-length {
+  text-align: right;
+}
+
+.earful-progress .slider {
+  height: 16px;
+  -barlevel-height: 4px;
+  -slider-handle-radius: 6px;
+}
+
+.earful-cards .earful-progress {
+  padding-top: 10px;
+}
+
 /* Cards: each player on its own tile, controls under the cover. */
 
 .earful-cards {
