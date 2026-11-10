@@ -20,7 +20,8 @@
 //   FAKE_PLAYER_SEEK_MODE how a seek is answered: "normal" (move, emit
 //                        Seeked), "ignore" (stay put, like YouTube during an
 //                        ad), "silent" (move without Seeked) or "announce"
-//                        (move and announce Position instead of Seeked)
+//                        (move and announce Position instead of Seeked) or
+//                        "slow" (move 3.5 s later, like a video buffering)
 //
 // For demos, these make it look like a real player:
 //   FAKE_PLAYER_BUS       bus name suffix, e.g. earful_tab_7.instance42
@@ -249,6 +250,14 @@ const player = {
         // A stale track id means the request was for an earlier track.
         if (!canSeek || id !== trackId() || seekMode === 'ignore')
             return;
+        if (seekMode === 'slow') {
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3500, () => {
+                setPositionValue(value);
+                seeked();
+                return GLib.SOURCE_REMOVE;
+            });
+            return;
+        }
         const length = trackLength();
         setPositionValue(length > 0 ? Math.min(value, length) : value);
         print(`${name}: position ${(position() / 1e6).toFixed(1)}`);

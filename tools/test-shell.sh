@@ -134,6 +134,7 @@ if [ -n "$SHOTS" ]; then
     check 'grep -qx "compact true" "$P"' "compact rows have no progress"
     check 'grep -qx "longname true" "$P"' "a very long site name is cut, not widening the menu"
     check 'grep -qx "refused true" "$P"' "a player that ignores seeking gets a fixed bar"
+    check 'grep -qx "slow true" "$P"' "a slow seek unlocks the bar when it lands"
     check 'grep -qx "announced true" "$P"' "an announced position is used"
     check 'grep -qx "reread true" "$P"' "a silent jump is found within 5 seconds"
     check '! grep -q "^error" "$P"' "progress test ran without errors"

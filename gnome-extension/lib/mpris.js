@@ -203,11 +203,11 @@ export class Player extends Signals.EventEmitter {
             // Most players never announce Position, but use it when one does.
             const position = changed.lookup_value('Position', null);
             if (position)
-                this._setPosition(asSeconds(position.deepUnpack()));
+                this._jumped(asSeconds(position.deepUnpack()));
             this._update();
         }, this);
         this._seekedId = this._playerProxy.connectSignal('Seeked',
-            (proxy, sender, [position]) => this._setPosition(asSeconds(position)));
+            (proxy, sender, [position]) => this._jumped(asSeconds(position)));
 
         this._update();
         this.refreshPosition();
@@ -404,6 +404,18 @@ export class Player extends Signals.EventEmitter {
         return this.length > 0 ? Math.min(seconds, this.length) : seconds;
     }
 
+    /**
+     * The player says its position jumped. A seek that seemed ignored may
+     * just have been slow (a video buffering), so the bar is unlocked again.
+     */
+    _jumped(seconds) {
+        if (this._seekRefusedOn && this._seekRefusedOn === this._trackRef) {
+            this._seekRefusedOn = null;
+            this.emit('changed');
+        }
+        this._setPosition(seconds);
+    }
+
     _setPosition(seconds) {
         this._positionBase = seconds;
         this._positionTime = GLib.get_monotonic_time();
@@ -420,7 +432,12 @@ export class Player extends Signals.EventEmitter {
                 Gio.DBusCallFlags.NONE, -1, this._cancellable);
             const [position] = reply.recursiveUnpack();
             if (typeof position === 'number' && Number.isFinite(position)) {
-                this._setPosition(Math.max(0, position / 1e6));
+                // A jump nobody announced (no Seeked) counts as one too.
+                const seconds = Math.max(0, position / 1e6);
+                if (Math.abs(seconds - this.position) > 3)
+                    this._jumped(seconds);
+                else
+                    this._setPosition(seconds);
                 return this.position;
             }
         } catch {

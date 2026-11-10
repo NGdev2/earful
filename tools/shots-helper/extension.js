@@ -183,7 +183,7 @@ export default class ShotsHelper extends Extension {
         GLib.spawn_async(null, ['gjs', '-m', `${GLib.getenv('ROOT')}/tools/fake-player.js`, name, '0'],
             env, GLib.SpawnFlags.SEARCH_PATH, null);
         // Players that answer a seek differently (see fake-player.js).
-        const modes = {Ad: 'ignore', Silent: 'silent', Announce: 'announce', Long: 'normal'};
+        const modes = {Ad: 'ignore', Silent: 'silent', Announce: 'announce', Slow: 'slow', Long: 'normal'};
         // A site whose name is a whole sentence must not widen the menu.
         const longName = `${'Watch films and series online for free in good quality, '.repeat(3)}— Google Chrome`;
         for (const [extra, mode] of Object.entries(modes)) {
@@ -206,7 +206,7 @@ export default class ShotsHelper extends Extension {
         };
         try {
             settings.set_string('menu-style', 'cards');
-            const ready = () => [name, 'Ad', 'Silent', 'Announce'].every(n => this._hasPlayer(earful, n)) &&
+            const ready = () => [name, 'Ad', 'Silent', 'Announce', 'Slow'].every(n => this._hasPlayer(earful, n)) &&
                 earful._manager.players.some(p => p.identity === longName);
             for (let i = 0; i < 20 && !ready(); i++)
                 await wait(500);
@@ -242,6 +242,17 @@ export default class ShotsHelper extends Extension {
             ad?._progress?.seekTo(0.5);
             await wait(3000);
             result.push(`refused ${!!ad && ad._progress.slider.reactive === false && ad.player.position < 60}`);
+
+            // A slow seek (buffering) looks ignored at first; the lock lifts
+            // when the player reports the jump.
+            const slow = itemOf('Slow');
+            slow?._progress?.seekTo(0.5);
+            await wait(2600);
+            const lockedFirst = slow?._progress?.slider.reactive === false;
+            await wait(2500);
+            result.push(`slow ${!!slow && slow._progress.slider.reactive === true &&
+                Math.abs(slow.player.position - 120) < 4}`);
+            result.push(`slowlocked ${lockedFirst}`);
 
             // A player that announces Position: used before the next reading.
             const announce = itemOf('Announce');
