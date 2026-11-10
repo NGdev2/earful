@@ -164,6 +164,51 @@ export default class ShotsHelper extends Extension {
         await shot('popups-no-shadow');
         settings.reset('toast-shadow');
         settings.reset('design');
+        await this._closePopup(settings);
+    }
+
+    /** The ✕ on a popup closes it without raising the player. */
+    async _closePopup(settings) {
+        settings.set_int('toast-duration', 30);
+        const popups = () => Main.layoutManager.uiGroup.get_children()
+            .filter(a => a.has_style_class_name?.('earful-toast') && !a.dismissing);
+        for (let i = 0; i < 20 && popups().length === 0; i++)
+            await wait(500);
+        const result = [];
+        const popup = popups().at(-1);
+        const close = popup?.get_child()?.get_children()
+            .find(a => a.has_style_class_name?.('earful-toast-close'));
+        result.push(`close shown ${!!close?.mapped}`);
+        if (close) {
+            let raised = false;
+            popup.connect('clicked', () => (raised = true));
+            // A real pointer click, so the popup underneath gets its say too.
+            // GNOME 51 dropped Clutter.get_default_backend().
+            const backend = Clutter.get_default_backend?.() ?? global.stage.context.get_backend();
+            const pointer = backend.get_default_seat()
+                .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+            const [x, y] = close.get_transformed_position();
+            const [w, h] = close.get_transformed_size();
+            const now = () => GLib.get_monotonic_time();
+            // A new virtual device takes a moment to be ready on GNOME 49+.
+            await wait(500);
+            pointer.notify_absolute_motion(now(), x + w / 2 - 2, y + h / 2 - 2);
+            await wait(200);
+            pointer.notify_absolute_motion(now(), x + w / 2, y + h / 2);
+            await wait(800);
+            result.push(`hover ${close.hover}`);
+            await shot('popups-close-hover');
+            pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
+            pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+            await wait(100);
+            result.push(`closing ${popup.dismissing === true}`);
+            result.push(`raised ${raised}`);
+            pointer.notify_absolute_motion(now(), 10, 400);
+            await wait(1000);
+            result.push(`gone ${!popups().includes(popup)}`);
+        }
+        settings.reset('toast-duration');
+        GLib.file_set_contents(`${OUT}/popup-close`, result.join('\n'));
     }
 
     /** Lots of players: the list scrolls, paused ones can be hidden. */

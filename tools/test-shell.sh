@@ -50,7 +50,7 @@ gjs -m "$ROOT/tools/make-covers.js" "$WORK/covers" || exit 1
 EXTENSIONS="['$UUID']"
 if [ -n "$SHOTS" ]; then
     mkdir -p "$SHOTS"
-    rm -f "$SHOTS/done" "$SHOTS/settings-come-back"
+    rm -f "$SHOTS/done" "$SHOTS/settings-come-back" "$SHOTS/popup-close"
     cp -r "$ROOT/tools/shots-helper" "$WORK/data/gnome-shell/extensions/earful-shots@test"
     EXTENSIONS="['$UUID', 'earful-shots@test']"
 fi
@@ -114,6 +114,11 @@ if [ -n "$SHOTS" ]; then
     check 'grep -qx "quiet true" "$SHOTS/settings-come-back"' "no note for Earful's own settings"
     check 'grep -qx "other raised true" "$SHOTS/settings-come-back"' "another extension's settings come forward"
     check 'grep -qx "noted true" "$SHOTS/settings-come-back"' "with a note to close them"
+    check 'grep -qx "close shown true" "$SHOTS/popup-close"' "popups have a close button"
+    check 'grep -qx "hover true" "$SHOTS/popup-close"' "the pointer reaches it"
+    check 'grep -qx "closing true" "$SHOTS/popup-close"' "the close button closes the popup"
+    check 'grep -qx "raised false" "$SHOTS/popup-close"' "without raising the player"
+    check 'grep -qx "gone true" "$SHOTS/popup-close"' "and the popup is gone"
 fi
 gnome-extensions disable "$UUID"; sleep 2
 echo "after disable: $(gnome-extensions info "$UUID" | grep -o 'State: .*')"
