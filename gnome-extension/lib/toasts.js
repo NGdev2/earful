@@ -9,6 +9,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
@@ -26,8 +27,9 @@ const MOVE_MS = 350;
 const FADE_OUT_MS = 900;
 const HOVER_GRACE_MS = 1500;
 
-const Toast = GObject.registerClass(
-class Toast extends St.Button {
+const Toast = GObject.registerClass({
+    Signals: {'close-clicked': {}},
+}, class Toast extends St.Button {
     _init(player, settings) {
         super._init({
             style_class: 'earful-toast',
@@ -72,6 +74,20 @@ class Toast extends St.Button {
         });
         this._surface.add_child(this._scene);
         this._surface.add_child(box);
+
+        // Closes the popup without raising the player, as a click would.
+        const close = new St.Button({
+            style_class: 'earful-toast-close',
+            can_focus: true,
+            x_expand: true,
+            y_expand: true,
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.START,
+            accessible_name: _('Close'),
+            child: new St.Icon({icon_name: 'window-close-symbolic'}),
+        });
+        close.connect('clicked', () => this.emit('close-clicked'));
+        this._surface.add_child(close);
         this.set_child(this._surface);
 
         // Cover art often arrives a moment after the title; keep it fresh
@@ -237,6 +253,7 @@ export class ToastManager {
             player.raise();
             this._dismiss(toast, SLIDE_IN_MS);
         });
+        toast.connect('close-clicked', () => this._dismiss(toast, SLIDE_IN_MS));
         toast.connect('notify::hover', () => {
             if (toast.dismissing)
                 return;

@@ -277,6 +277,27 @@
 
 .earful-toast-text {
   spacing: 2px;
+  /* Room for the close button. */
+  padding-right: 18px;
+}
+
+/* 10px from the popup's edge, counting the 1px border. */
+.earful-toast-close {
+  margin: 9px;
+  padding: 4px;
+  border-radius: 99px;
+  color: #fafafa;
+  opacity: 0.55;
+}
+
+.earful-toast-close:hover,
+.earful-toast-close:focus {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.earful-toast-close StIcon {
+  icon-size: 12px;
 }
 
 .earful-toast-source {
