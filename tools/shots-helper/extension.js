@@ -173,6 +173,9 @@ export default class ShotsHelper extends Extension {
     async _progress(earful) {
         const settings = earful._settings;
         const result = [];
+        // Six players start below at once; their popups aren't what this
+        // step tests (a burst of popups is a separate case).
+        settings.set_boolean('toasts-enabled', false);
         // A player of its own: Spotify's 2 s tracks would reset the bar.
         const name = 'Progress';
         const log = `${OUT}/progress-calls.log`;
@@ -287,6 +290,7 @@ export default class ShotsHelper extends Extension {
                 earful.menu.close(false);
         } finally {
             settings.reset('menu-style');
+            settings.reset('toasts-enabled');
             for (const player of [name, ...Object.keys(modes)]) {
                 Gio.DBus.session.call(`org.mpris.MediaPlayer2.${player}`, '/org/mpris/MediaPlayer2',
                     'org.mpris.MediaPlayer2', 'Quit', null, null, Gio.DBusCallFlags.NONE, -1, null, null);
