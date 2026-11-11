@@ -594,3 +594,52 @@
   width: 34px;
   height: 34px;
 }
+
+/* Slim card: one row, the progress as a line along the bottom edge */
+.earful-card-slim {
+  padding-bottom: 6px;
+}
+
+.earful-progress-edge {
+  height: 16px;
+  padding-top: 2px;
+}
+
+.earful-progress-edge .slider {
+  height: 4px;
+  -barlevel-height: 3px;
+  -slider-handle-radius: 0;
+}
+
+.earful-progress-edge:expanded .slider {
+  height: 12px;
+  -barlevel-height: 4px;
+  -slider-handle-radius: 5px;
+}
+
+.earful-volume-slide {
+  spacing: 4px;
+  padding-top: 0;
+}
+
+/* Volume on the cover (lib/coverVolume.js); sizes are set inline */
+.earful-cv-badge {
+  background-color: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+  padding: 0;
+}
+
+.earful-cv-badge:hover,
+.earful-cv-badge:focus {
+  background-color: rgba(0, 0, 0, 0.72);
+}
+
+.earful-cv-badge:active {
+  background-color: rgba(0, 0, 0, 0.85);
+}
+
+.earful-cv-percent {
+  color: #ffffff;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}

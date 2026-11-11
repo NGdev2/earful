@@ -92,6 +92,22 @@
       <default>'led'</default>
       <summary>Look of the standing volume on cards</summary>
     </key>
+    <key name="cover-volume-animation" type="s">
+      <choices>
+        <choice value="liquid"/>
+        <choice value="cloud"/>
+        <choice value="dim"/>
+        <choice value="gray"/>
+        <choice value="ring"/>
+        <choice value="frame"/>
+        <choice value="bars"/>
+        <choice value="percent"/>
+        <choice value="speaker"/>
+        <choice value="heart"/>
+      </choices>
+      <default>'liquid'</default>
+      <summary>How the cover shows the volume while you scroll on it</summary>
+    </key>
     <key name="menu-background" type="s">
       <choices>
         <choice value="theme"/>

@@ -25,12 +25,18 @@ export function formatTime(seconds) {
  */
 export const ProgressBar = GObject.registerClass(
 class ProgressBar extends St.BoxLayout {
-    _init() {
+    /**
+     * @param {object} [options]
+     * @param {boolean} [options.edge] a thin line along the card's edge that
+     *   grows, with the times, when expanded (on hover)
+     */
+    _init({edge = false} = {}) {
         super._init({
-            style_class: 'earful-progress',
+            style_class: edge ? 'earful-progress earful-progress-edge' : 'earful-progress',
             x_expand: true,
             visible: false,
         });
+        this._edge = edge;
         this._player = null;
         this._dragging = false;
         this._updating = false;
@@ -60,6 +66,7 @@ class ProgressBar extends St.BoxLayout {
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.add_child(this.lengthLabel);
+        this.setExpanded(!edge);
 
         this.connect('destroy', () => {
             this._player?.disconnectObject(this);
@@ -77,6 +84,21 @@ class ProgressBar extends St.BoxLayout {
                 this);
         }
         this.tick();
+    }
+
+    /** Edge bars show the times and a handle only when expanded. */
+    setExpanded(expanded) {
+        if (!this._edge)
+            return;
+        this.elapsedLabel.visible = expanded;
+        this.lengthLabel.visible = expanded;
+        // Thin, it lies on the bottom of its row, so growing doesn't move the card.
+        this.slider.y_align = expanded ? Clutter.ActorAlign.CENTER : Clutter.ActorAlign.END;
+        if (expanded)
+            this.add_style_pseudo_class('expanded');
+        else
+            this.remove_style_pseudo_class('expanded');
+        this.slider.queue_repaint();
     }
 
     /** Inline style for the bar, e.g. the cover's accent color. */

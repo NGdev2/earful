@@ -35,6 +35,21 @@ const MENU_STYLES = [
 const CARD_LAYOUTS = [
     ['standing-volume', () => _('Volume on the right')],
     ['side-volume', () => _('Volume beside the cover')],
+    ['slim', () => _('Slim')],
+    ['cover-volume', () => _('Volume on the cover')],
+];
+
+const COVER_ANIMATIONS = [
+    ['liquid', () => _('Liquid')],
+    ['cloud', () => _('Cloud')],
+    ['dim', () => _('Dim above')],
+    ['gray', () => _('Gray above')],
+    ['ring', () => _('Ring')],
+    ['frame', () => _('Frame')],
+    ['bars', () => _('Bars')],
+    ['percent', () => _('Percent')],
+    ['speaker', () => _('Speaker waves')],
+    ['heart', () => _('Heart')],
 ];
 
 const VOLUME_STYLES = [
@@ -223,17 +238,25 @@ export default class EarfulPreferences extends ExtensionPreferences {
             CARD_LAYOUTS, _('The progress bar and where the volume sits.'));
         const volumeStyle = choiceRow(window, settings, 'card-volume-style',
             _('Volume style'), VOLUME_STYLES);
+        const coverAnimation = choiceRow(window, settings, 'cover-volume-animation',
+            _('Cover animation'), COVER_ANIMATIONS,
+            _('Scroll on the cover to change the volume.'));
         look.add(cardLayout);
         look.add(volumeStyle);
-        // Card options only matter for cards.
+        look.add(coverAnimation);
+        // Each option only matters for the layouts that use it.
         const syncCards = () => {
             const cards = settings.get_string('menu-style') === 'cards';
+            const layout = settings.get_string('card-layout');
             cardLayout.sensitive = cards;
-            volumeStyle.sensitive = cards;
+            volumeStyle.sensitive = cards &&
+                ['standing-volume', 'side-volume'].includes(layout);
+            coverAnimation.sensitive = cards && layout === 'cover-volume';
         };
         syncCards();
-        const menuStyleId = settings.connect('changed::menu-style', syncCards);
-        window.connect('close-request', () => settings.disconnect(menuStyleId));
+        const cardIds = ['menu-style', 'card-layout'].map(key =>
+            settings.connect(`changed::${key}`, syncCards));
+        window.connect('close-request', () => cardIds.forEach(id => settings.disconnect(id)));
         look.add(choiceRow(window, settings, 'menu-background', _('Menu background'),
             MENU_BACKGROUNDS, _('Match the music takes the colors of the song that is playing.')));
         look.add(choiceRow(window, settings, 'design', _('Design'), DESIGNS,

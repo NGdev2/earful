@@ -192,12 +192,52 @@ export default class ShotsHelper extends Extension {
                     await wait(400);
                 }
             }
+            // Slim: a slide-out volume and the progress along the edge,
+            // which grows when the card is hovered.
+            settings.set_string('card-layout', 'slim');
+            await wait(500);
+            earful.menu.open(false);
+            await wait(1200);
+            const slim = earful._section._getMenuItems()
+                .filter(i => i._progress?._player?.length > 0);
+            const first = slim[0];
+            const thin = first?._progress.elapsedLabel.visible === false;
+            if (first)
+                first.active = true;
+            await wait(400);
+            result.push(`slim ${!!first && thin && first._progress.elapsedLabel.visible === true &&
+                first._volume?.visible === true}`);
+            await shot('card-slim');
+            earful.menu.close(false);
+            await wait(400);
+
+            // Volume on the cover: each animation, shown as after a scroll.
+            settings.set_string('card-layout', 'cover-volume');
+            for (const animation of ['liquid', 'cloud', 'dim', 'gray', 'ring', 'frame',
+                'bars', 'percent', 'speaker', 'heart']) {
+                settings.set_string('cover-volume-animation', animation);
+                await wait(500);
+                earful.menu.open(false);
+                await wait(1200);
+                const covers = earful._section._getMenuItems()
+                    .map(i => i._coverVolume).filter(Boolean);
+                for (const cover of covers) {
+                    cover._change(0.62);
+                    cover._linger();
+                }
+                await wait(450);
+                result.push(`cover-${animation} ${covers.length > 0 && covers.every(c => c._shown)}`);
+                await shot(`card-cover-${animation}`);
+                earful.menu.close(false);
+                await wait(400);
+            }
         } catch (e) {
             logError(e, 'earful-shots');
             result.push(`error ${e.message}`);
         } finally {
             settings.reset('card-layout');
             settings.reset('card-volume-style');
+            settings.reset('cover-volume-animation');
             settings.reset('menu-style');
             settings.reset('toasts-enabled');
             GLib.file_set_contents(`${OUT}/card-layouts`, result.join('\n'));

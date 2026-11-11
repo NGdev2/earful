@@ -18,6 +18,7 @@ import * as Look from './look.js';
 import {ProgressBar} from './progress.js';
 import {VolumeSource, volumeIcon} from './volume.js';
 import {VerticalVolume} from './volumeStyles.js';
+import {CoverVolume} from './coverVolume.js';
 import {SceneLayer} from './scenes.js';
 import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
@@ -50,14 +51,25 @@ function controlButton(iconName, onClick) {
     return button;
 }
 
+// Width of a slide-out volume bar, in logical pixels.
+const SLIDE_WIDTH = 90;
+
 /** A small horizontal volume slider: speaker (mute) and bar. */
 const VolumeSlider = GObject.registerClass(
 class VolumeSlider extends St.BoxLayout {
-    _init(source) {
+    /**
+     * @param {VolumeSource} source
+     * @param {object} [options]
+     * @param {boolean} [options.slide] only the speaker shows; the bar slides
+     *   out from it while hovered
+     */
+    _init(source, {slide = false} = {}) {
         super._init({
-            style_class: 'earful-volume',
-            x_expand: true,
+            style_class: slide ? 'earful-volume earful-volume-slide' : 'earful-volume',
+            x_expand: !slide,
             visible: false,
+            track_hover: slide,
+            reactive: slide,
         });
         this._source = source;
         this._dragging = false;
@@ -94,6 +106,21 @@ class VolumeSlider extends St.BoxLayout {
             },
             this);
         this.add_child(this._slider);
+        if (slide) {
+            this._slider.width = 0;
+            this._slider.opacity = 0;
+            const sync = () => {
+                const open = this.hover || this._dragging;
+                this._slider.ease({
+                    width: open ? SLIDE_WIDTH * scaleFactor() : 0,
+                    opacity: open ? 255 : 0,
+                    duration: 180,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                });
+            };
+            this.connect('notify::hover', sync);
+            this._slider.connect('drag-end', sync);
+        }
 
         source.connectObject('changed', () => this.sync(), this);
         this.connect('destroy', () => source.disconnectObject(this));
@@ -153,7 +180,8 @@ const PlayerItem = GObject.registerClass({
         this._settings = settings;
         this._style = style;
 
-        this._art = new CoverArt(COVER_SIZES[style]);
+        const slim = style === 'cards' && settings.get_string('card-layout') === 'slim';
+        this._art = new CoverArt(slim ? COVER_SIZES.list : COVER_SIZES[style]);
 
         const text = new St.BoxLayout({
             ...VERTICAL,
@@ -221,8 +249,9 @@ const PlayerItem = GObject.registerClass({
         // rows, standing up on cards. Compact rows have none.
         this._volume = null;
         this._vvolume = null;
-        // Elapsed time, bar and length; compact rows have no sliders.
-        this._progress = style === 'compact' ? null : new ProgressBar();
+        // Elapsed time, bar and length; compact rows have no sliders. Slim
+        // cards have it as a thin line along the bottom edge.
+        this._progress = style === 'compact' ? null : new ProgressBar({edge: slim});
 
         if (style === 'cards') {
             this._buildCard(settings.get_string('card-layout'), {text, controls});
@@ -244,7 +273,7 @@ const PlayerItem = GObject.registerClass({
             'changed', () => this._sync(),
             'closed', () => this.destroy(),
             this);
-        if (this._volume || this._vvolume)
+        if (this._volume || this._vvolume || this._coverVolume)
             audio.connectObject('changed', () => this._syncVolume(), this);
         settings.connectObject(
             'changed::media-keys-target', () => this._syncPin(),
@@ -273,7 +302,9 @@ const PlayerItem = GObject.registerClass({
      * Lays out a card. standing-volume: cover and text, the progress and
      * the controls under them, the volume standing on the right.
      * side-volume: a small standing volume left of the cover, the progress
-     * and the controls in one row below.
+     * and the controls in one row below. slim: one row with a slide-out
+     * volume, the progress as a line along the bottom edge. cover-volume:
+     * scroll on the cover for the volume, progress and controls below.
      */
     _buildCard(layout, {text, controls}) {
         const volumeStyle = this._settings.get_string('card-volume-style');
@@ -281,7 +312,43 @@ const PlayerItem = GObject.registerClass({
         const column = new St.BoxLayout({...VERTICAL, x_expand: true});
         let content = column;
 
-        if (layout === 'side-volume') {
+        if (layout === 'cover-volume') {
+            // Scroll on the cover for the volume; the progress row is free.
+            this._coverVolume = new CoverVolume(this._art, this._volumeSource, {
+                animation: this._settings.get_string('cover-volume-animation'),
+                size: COVER_SIZES.cards,
+            });
+            top.add_child(this._coverVolume);
+            top.add_child(text);
+            top.add_child(this._pin);
+            top.add_child(this._dismiss);
+            const bottom = new St.BoxLayout({style_class: 'earful-card-bottom'});
+            this._progress.y_align = Clutter.ActorAlign.CENTER;
+            bottom.add_child(this._progress);
+            controls.x_align = Clutter.ActorAlign.END;
+            const syncControls = () => (controls.x_expand = !this._progress.visible);
+            this._progress.connect('notify::visible', syncControls);
+            syncControls();
+            bottom.add_child(controls);
+            column.add_child(top);
+            column.add_child(bottom);
+        } else if (layout === 'slim') {
+            // One row; previous is left out to give the title room.
+            this._prev.visible = false;
+            this._volume = new VolumeSlider(this._volumeSource, {slide: true});
+            this._volume.y_align = Clutter.ActorAlign.CENTER;
+            top.add_child(this._art);
+            top.add_child(text);
+            top.add_child(this._volume);
+            top.add_child(controls);
+            top.add_child(this._pin);
+            top.add_child(this._dismiss);
+            column.add_child(top);
+            column.add_child(this._progress);
+            column.add_style_class_name('earful-card-slim');
+            // The edge line grows and shows the times while the card is hovered.
+            this.connect('notify::active', () => this._progress.setExpanded(this.active));
+        } else if (layout === 'side-volume') {
             this._vvolume = new VerticalVolume(this._volumeSource,
                 {style: volumeStyle, compact: true});
             top.add_child(this._vvolume);
@@ -346,6 +413,8 @@ const PlayerItem = GObject.registerClass({
             this._progress.setSliderStyle(Look.sliderStyle(look, palette));
             this._vvolume?.setAccent(Look.accentColor(look, palette));
             this._vvolume?.setPlaying(this.player.isPlaying);
+            this._coverVolume?.setAccent(Look.accentColor(look, palette));
+            this._coverVolume?.setPlaying(this.player.isPlaying);
             this._scene.update(look, palette, this.player.isPlaying);
         }
         this._source?.update(this.player, look.animate, Look.accentColor(look, palette));
@@ -536,6 +605,7 @@ class EarfulIndicator extends PanelMenu.Button {
             'changed::menu-style', () => this._queueRebuild(),
             'changed::card-layout', () => this._queueRebuild(),
             'changed::card-volume-style', () => this._queueRebuild(),
+            'changed::cover-volume-animation', () => this._queueRebuild(),
             'changed::menu-background', () => this._syncBackground(),
             'changed::design', () => this._syncBackground(),
             'changed::design-color', () => this._syncBackground(),
