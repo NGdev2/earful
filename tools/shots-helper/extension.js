@@ -167,6 +167,41 @@ export default class ShotsHelper extends Extension {
         settings.reset('design');
         await this._closePopup(settings);
         await this._progress(earful);
+        await this._cardLayouts(earful);
+    }
+
+    /** Each card layout with each standing volume style. */
+    async _cardLayouts(earful) {
+        const settings = earful._settings;
+        const result = [];
+        settings.set_boolean('toasts-enabled', false);
+        settings.set_string('menu-style', 'cards');
+        try {
+            for (const layout of ['standing-volume', 'side-volume']) {
+                for (const style of ['led', 'knob', 'pill', 'fader', 'line']) {
+                    settings.set_string('card-layout', layout);
+                    settings.set_string('card-volume-style', style);
+                    await wait(500);
+                    earful.menu.open(false);
+                    await wait(1200);
+                    const items = earful._section._getMenuItems().filter(i => i._vvolume !== undefined);
+                    const shown = items.length > 0 && items.every(i => i._vvolume?.visible === true);
+                    result.push(`${layout}-${style} ${shown}`);
+                    await shot(`card-${layout}-${style}`);
+                    earful.menu.close(false);
+                    await wait(400);
+                }
+            }
+        } catch (e) {
+            logError(e, 'earful-shots');
+            result.push(`error ${e.message}`);
+        } finally {
+            settings.reset('card-layout');
+            settings.reset('card-volume-style');
+            settings.reset('menu-style');
+            settings.reset('toasts-enabled');
+            GLib.file_set_contents(`${OUT}/card-layouts`, result.join('\n'));
+        }
     }
 
     /** The progress bar: it shows, moves, seeks, and only where it should. */

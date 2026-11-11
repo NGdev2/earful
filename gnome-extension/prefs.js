@@ -32,6 +32,19 @@ const MENU_STYLES = [
     ['compact', () => _('Compact (no sliders)')],
 ];
 
+const CARD_LAYOUTS = [
+    ['standing-volume', () => _('Volume on the right')],
+    ['side-volume', () => _('Volume beside the cover')],
+];
+
+const VOLUME_STYLES = [
+    ['led', () => _('LED steps')],
+    ['knob', () => _('Knob')],
+    ['pill', () => _('Pill')],
+    ['fader', () => _('Studio fader')],
+    ['line', () => _('Line')],
+];
+
 const MENU_BACKGROUNDS = [
     ['theme', () => _('Theme')],
     ['dark', () => _('Dark')],
@@ -206,6 +219,21 @@ export default class EarfulPreferences extends ExtensionPreferences {
         });
         page.add(look);
         look.add(choiceRow(window, settings, 'menu-style', _('Menu style'), MENU_STYLES));
+        const cardLayout = choiceRow(window, settings, 'card-layout', _('Card layout'),
+            CARD_LAYOUTS, _('The progress bar and where the volume sits.'));
+        const volumeStyle = choiceRow(window, settings, 'card-volume-style',
+            _('Volume style'), VOLUME_STYLES);
+        look.add(cardLayout);
+        look.add(volumeStyle);
+        // Card options only matter for cards.
+        const syncCards = () => {
+            const cards = settings.get_string('menu-style') === 'cards';
+            cardLayout.sensitive = cards;
+            volumeStyle.sensitive = cards;
+        };
+        syncCards();
+        const menuStyleId = settings.connect('changed::menu-style', syncCards);
+        window.connect('close-request', () => settings.disconnect(menuStyleId));
         look.add(choiceRow(window, settings, 'menu-background', _('Menu background'),
             MENU_BACKGROUNDS, _('Match the music takes the colors of the song that is playing.')));
         look.add(choiceRow(window, settings, 'design', _('Design'), DESIGNS,

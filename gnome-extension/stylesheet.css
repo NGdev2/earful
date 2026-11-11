@@ -415,3 +415,182 @@
 .earful-menu-painted .popup-separator-menu-item-separator {
   background-color: rgba(255, 255, 255, 0.14);
 }
+
+/* Card layouts: the volume standing on the right, or beside the cover */
+.earful-card-row {
+  spacing: 12px;
+}
+
+.earful-card-controls {
+  padding-top: 6px;
+}
+
+/* Vertical volume (lib/volumeStyles.js) */
+.earful-vvol {
+  spacing: 6px;
+}
+
+.earful-vvol-compact {
+  spacing: 4px;
+}
+
+.earful-vvol .earful-volume-mute {
+  padding: 4px;
+}
+
+.earful-vvol-compact .earful-volume-mute {
+  padding: 3px;
+}
+
+.earful-vvol-compact .earful-volume-icon {
+  icon-size: 12px;
+}
+
+.earful-vvol-track {
+  min-height: 90px;
+}
+
+.earful-vvol-compact .earful-vvol-track {
+  height: 44px;
+  min-height: 44px;
+}
+
+/* LED steps */
+.earful-vvol-led {
+  width: 16px;
+  -earful-gap: 2px;
+}
+
+.earful-vvol-compact .earful-vvol-led {
+  width: 14px;
+}
+
+.earful-vvol-seg {
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.earful-vvol-led:focus .earful-vvol-seg {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.earful-vvol-lit {
+  border-radius: 2px;
+  background-color: #fafafa;
+}
+
+/* Pill */
+.earful-vvol-pill {
+  width: 14px;
+  border-radius: 99px;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.earful-vvol-pill:focus {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+
+.earful-vvol-compact .earful-vvol-pill {
+  width: 8px;
+}
+
+.earful-vvol-fill {
+  border-radius: 99px;
+  background-color: #fafafa;
+}
+
+/* Line (today's slider, standing up) */
+.earful-vvol-line {
+  width: 16px;
+}
+
+.earful-vvol-compact .earful-vvol-line {
+  width: 12px;
+}
+
+.earful-vvol-rail {
+  width: 4px;
+  border-radius: 99px;
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.earful-vvol-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.earful-vvol-compact .earful-vvol-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+}
+
+.earful-vvol-line:focus .earful-vvol-thumb {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+/* Studio fader */
+.earful-vvol-fader {
+  width: 38px;
+  padding-right: 2px;
+}
+
+.earful-vvol-compact .earful-vvol-fader {
+  width: 24px;
+}
+
+.earful-vvol-groove {
+  width: 4px;
+  border-radius: 2px;
+  background-color: #0b0b0d;
+}
+
+.earful-vvol-compact .earful-vvol-groove {
+  width: 3px;
+}
+
+.earful-vvol-meter {
+  width: 6px;
+}
+
+.earful-vvol-compact .earful-vvol-meter {
+  width: 4px;
+}
+
+.earful-vvol-cap {
+  width: 22px;
+  height: 14px;
+  border-radius: 3px;
+  background-gradient-direction: vertical;
+  background-gradient-start: #ececec;
+  background-gradient-end: #7a7a7a;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.earful-vvol-compact .earful-vvol-cap {
+  width: 15px;
+  height: 10px;
+}
+
+.earful-vvol-cap-line {
+  height: 2px;
+  background-color: #222;
+}
+
+.earful-vvol-fader:focus .earful-vvol-cap {
+  background-gradient-start: #ffffff;
+}
+
+/* Knob (drawn; only its size is set here) */
+.earful-vvol-knob {
+  width: 44px;
+  height: 44px;
+}
+
+.earful-vvol-compact .earful-vvol-knob {
+  width: 34px;
+  height: 34px;
+}

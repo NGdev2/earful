@@ -70,6 +70,28 @@
       <default>'cards'</default>
       <summary>How players look in the top bar menu</summary>
     </key>
+    <key name="card-layout" type="s">
+      <choices>
+        <choice value="standing-volume"/>
+        <choice value="side-volume"/>
+        <choice value="slim"/>
+        <choice value="cover-volume"/>
+      </choices>
+      <default>'standing-volume'</default>
+      <summary>Where things sit on a card</summary>
+      <description>standing-volume: progress under the text, volume standing on the right. side-volume: a small volume beside the cover. slim: one row, progress on the edge. cover-volume: scroll on the cover for the volume.</description>
+    </key>
+    <key name="card-volume-style" type="s">
+      <choices>
+        <choice value="led"/>
+        <choice value="knob"/>
+        <choice value="pill"/>
+        <choice value="fader"/>
+        <choice value="line"/>
+      </choices>
+      <default>'led'</default>
+      <summary>Look of the standing volume on cards</summary>
+    </key>
     <key name="menu-background" type="s">
       <choices>
         <choice value="theme"/>

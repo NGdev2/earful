@@ -16,6 +16,8 @@ import {ensureActorVisibleInScrollView} from 'resource:///org/gnome/shell/misc/a
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
 import {ProgressBar} from './progress.js';
+import {VolumeSource, volumeIcon} from './volume.js';
+import {VerticalVolume} from './volumeStyles.js';
 import {SceneLayer} from './scenes.js';
 import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
@@ -48,18 +50,16 @@ function controlButton(iconName, onClick) {
     return button;
 }
 
-/** A small volume slider for a player's MPRIS volume or a set of streams. */
+/** A small horizontal volume slider: speaker (mute) and bar. */
 const VolumeSlider = GObject.registerClass(
 class VolumeSlider extends St.BoxLayout {
-    _init(audio) {
+    _init(source) {
         super._init({
             style_class: 'earful-volume',
             x_expand: true,
             visible: false,
         });
-        this._audio = audio;
-        this._player = null;
-        this._streams = [];
+        this._source = source;
         this._dragging = false;
         this._updating = false;
 
@@ -72,8 +72,13 @@ class VolumeSlider extends St.BoxLayout {
             accessible_name: _('Mute'),
             child: this._icon,
         });
-        this._muteButton.connect('clicked', () => this._toggleMute());
-        this._unmuteTo = 1;
+        this._muteButton.connect('clicked', () => {
+            const value = source.toggleMute();
+            if (value === null)
+                return;
+            this._setSlider(value);
+            this._syncIcon(value);
+        });
         this.add_child(this._muteButton);
 
         this._slider = new Slider.Slider(0);
@@ -90,14 +95,9 @@ class VolumeSlider extends St.BoxLayout {
             this);
         this.add_child(this._slider);
 
-        this.connect('destroy', () => {
-            for (const stream of this._streams)
-                stream.disconnectObject(this);
-        });
-    }
-
-    bindPlayer(player) {
-        this._bind(player, []);
+        source.connectObject('changed', () => this.sync(), this);
+        this.connect('destroy', () => source.disconnectObject(this));
+        this.sync();
     }
 
     /** Inline style for the bar, e.g. the cover's accent color. */
@@ -109,86 +109,30 @@ class VolumeSlider extends St.BoxLayout {
         this._slider.queue_repaint();
     }
 
-    bindStreams(streams) {
-        this._bind(null, streams);
-    }
-
-    _bind(player, streams) {
-        const same = player === this._player &&
-            streams.length === this._streams.length &&
-            streams.every((s, i) => s === this._streams[i]);
-        if (!same) {
-            for (const stream of this._streams)
-                stream.disconnectObject(this);
-            this._player = player;
-            this._streams = streams;
-            for (const stream of streams) {
-                stream.connectObject(
-                    'notify::volume', () => this.sync(),
-                    'notify::is-muted', () => this.sync(),
-                    this);
-            }
-        }
-        this.sync();
-    }
-
-    _read() {
-        if (this._player)
-            return this._player.volume;
-        if (this._streams.length > 0)
-            return this._audio.getVolume(this._streams);
-        return null;
-    }
-
     sync() {
-        const value = this._read();
+        const value = this._source.read();
         this.visible = value !== null;
         if (value === null || this._dragging)
             return;
+        this._setSlider(value);
+        this._syncIcon(value);
+    }
+
+    _setSlider(value) {
         this._updating = true;
         this._slider.value = value;
         this._updating = false;
-        this._syncIcon(value);
     }
 
     _onSliderChanged() {
         if (this._updating)
             return;
-        this._apply(this._slider.value);
-    }
-
-    _apply(value) {
-        if (this._player)
-            this._player.setVolume(value);
-        else
-            this._audio.setVolume(this._streams, value);
-        this._syncIcon(value);
-    }
-
-    _toggleMute() {
-        const value = this._read();
-        if (value === null)
-            return;
-        if (value > 0) {
-            this._unmuteTo = value;
-            this._apply(0);
-        } else {
-            this._apply(this._unmuteTo);
-        }
-        this._updating = true;
-        this._slider.value = value > 0 ? 0 : this._unmuteTo;
-        this._updating = false;
+        this._source.apply(this._slider.value);
+        this._syncIcon(this._slider.value);
     }
 
     _syncIcon(value) {
-        let level = 'high';
-        if (value <= 0)
-            level = 'muted';
-        else if (value < 1 / 3)
-            level = 'low';
-        else if (value < 2 / 3)
-            level = 'medium';
-        this._icon.icon_name = `audio-volume-${level}-symbolic`;
+        this._icon.icon_name = volumeIcon(value);
         this._muteButton.accessible_name = value > 0 ? _('Mute') : _('Unmute');
     }
 });
@@ -271,39 +215,22 @@ const PlayerItem = GObject.registerClass({
         controls.add_child(this._playPause);
         controls.add_child(this._next);
 
-        this._volume = style === 'compact' ? null : new VolumeSlider(audio);
+        this._volumeSource = new VolumeSource(audio);
+        this.connect('destroy', () => this._volumeSource.destroy());
+        // The volume is drawn by the layout: a horizontal slider in list
+        // rows, standing up on cards. Compact rows have none.
+        this._volume = null;
+        this._vvolume = null;
         // Elapsed time, bar and length; compact rows have no sliders.
         this._progress = style === 'compact' ? null : new ProgressBar();
 
         if (style === 'cards') {
-            // Cover and text on top; volume and controls share the row below.
-            const column = new St.BoxLayout({...VERTICAL, x_expand: true});
-            const top = new St.BoxLayout({style_class: 'earful-card-top'});
-            top.add_child(this._art);
-            top.add_child(text);
-            top.add_child(this._pin);
-            top.add_child(this._dismiss);
-            const bottom = new St.BoxLayout({style_class: 'earful-card-bottom'});
-            bottom.add_child(this._volume);
-            controls.x_expand = true;
-            controls.x_align = Clutter.ActorAlign.END;
-            bottom.add_child(controls);
-            column.add_child(top);
-            column.add_child(this._progress);
-            column.add_child(bottom);
-            // The design's scene lies under the content, edge to edge.
-            column.style_class = 'earful-card-content';
-            this._scene = new SceneLayer(CARD_RADIUS);
-            const stack = new St.Widget({
-                layout_manager: new Clutter.BinLayout(),
-                x_expand: true,
-            });
-            stack.add_child(this._scene);
-            stack.add_child(column);
-            this.add_child(stack);
+            this._buildCard(settings.get_string('card-layout'), {text, controls});
         } else {
-            if (this._volume)
+            if (style === 'list') {
+                this._volume = new VolumeSlider(this._volumeSource);
                 text.add_child(this._volume);
+            }
             if (this._progress)
                 text.add_child(this._progress);
             this.add_child(this._art);
@@ -317,7 +244,7 @@ const PlayerItem = GObject.registerClass({
             'changed', () => this._sync(),
             'closed', () => this.destroy(),
             this);
-        if (this._volume)
+        if (this._volume || this._vvolume)
             audio.connectObject('changed', () => this._syncVolume(), this);
         settings.connectObject(
             'changed::media-keys-target', () => this._syncPin(),
@@ -342,6 +269,65 @@ const PlayerItem = GObject.registerClass({
         this._syncPin();
     }
 
+    /**
+     * Lays out a card. standing-volume: cover and text, the progress and
+     * the controls under them, the volume standing on the right.
+     * side-volume: a small standing volume left of the cover, the progress
+     * and the controls in one row below.
+     */
+    _buildCard(layout, {text, controls}) {
+        const volumeStyle = this._settings.get_string('card-volume-style');
+        const top = new St.BoxLayout({style_class: 'earful-card-top'});
+        const column = new St.BoxLayout({...VERTICAL, x_expand: true});
+        let content = column;
+
+        if (layout === 'side-volume') {
+            this._vvolume = new VerticalVolume(this._volumeSource,
+                {style: volumeStyle, compact: true});
+            top.add_child(this._vvolume);
+            top.add_child(this._art);
+            top.add_child(text);
+            top.add_child(this._pin);
+            top.add_child(this._dismiss);
+            const bottom = new St.BoxLayout({style_class: 'earful-card-bottom'});
+            this._progress.y_align = Clutter.ActorAlign.CENTER;
+            bottom.add_child(this._progress);
+            // Without a bar (no length) the controls still sit on the right.
+            controls.x_align = Clutter.ActorAlign.END;
+            const syncControls = () => (controls.x_expand = !this._progress.visible);
+            this._progress.connect('notify::visible', syncControls);
+            syncControls();
+            bottom.add_child(controls);
+            column.add_child(top);
+            column.add_child(bottom);
+        } else {
+            top.add_child(this._art);
+            top.add_child(text);
+            top.add_child(this._pin);
+            top.add_child(this._dismiss);
+            controls.x_align = Clutter.ActorAlign.CENTER;
+            controls.add_style_class_name('earful-card-controls');
+            column.add_child(top);
+            column.add_child(this._progress);
+            column.add_child(controls);
+            this._vvolume = new VerticalVolume(this._volumeSource, {style: volumeStyle});
+            content = new St.BoxLayout({style_class: 'earful-card-row', x_expand: true});
+            content.add_child(column);
+            content.add_child(this._vvolume);
+        }
+
+        // The design's scene lies under the content, edge to edge.
+        content.add_style_class_name('earful-card-content');
+        this._scene = new SceneLayer(CARD_RADIUS);
+        const stack = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+            x_expand: true,
+        });
+        stack.add_child(this._scene);
+        stack.add_child(content);
+        this.add_child(stack);
+    }
+
     /** Called once a second while the menu is open. */
     tick() {
         this._progress?.tick();
@@ -356,21 +342,21 @@ const PlayerItem = GObject.registerClass({
                 this.add_style_class_name('earful-painted');
             else
                 this.remove_style_class_name('earful-painted');
-            this._volume.setSliderStyle(Look.sliderStyle(look, palette));
+            this._volume?.setSliderStyle(Look.sliderStyle(look, palette));
             this._progress.setSliderStyle(Look.sliderStyle(look, palette));
+            this._vvolume?.setAccent(Look.accentColor(look, palette));
+            this._vvolume?.setPlaying(this.player.isPlaying);
             this._scene.update(look, palette, this.player.isPlaying);
         }
         this._source?.update(this.player, look.animate, Look.accentColor(look, palette));
     }
 
     _syncVolume() {
-        if (!this._volume)
-            return;
         // The player's own volume if it has one, else its mixer streams.
         if (this.player.volume !== null)
-            this._volume.bindPlayer(this.player);
+            this._volumeSource.bindPlayer(this.player);
         else
-            this._volume.bindStreams(this._audio.streamsFor(this.player));
+            this._volumeSource.bindStreams(this._audio.streamsFor(this.player));
     }
 
     _syncPin() {
@@ -443,7 +429,9 @@ class AudioAppItem extends PopupMenu.PopupBaseMenuItem {
         // "mpv" above "My Trip" when the app says what it plays.
         this._source = new St.Label({style_class: 'earful-source'});
         this._name = new St.Label({style_class: 'earful-title'});
-        this._volume = new VolumeSlider(audio);
+        this._volumeSource = new VolumeSource(audio);
+        this._volume = new VolumeSlider(this._volumeSource);
+        this.connect('destroy', () => this._volumeSource.destroy());
         text.add_child(this._source);
         text.add_child(this._name);
         text.add_child(this._volume);
@@ -462,7 +450,7 @@ class AudioAppItem extends PopupMenu.PopupBaseMenuItem {
         this._source.text = entry.detail ? entry.name : '';
         this._source.visible = entry.detail !== '';
         this._name.text = entry.detail || entry.name;
-        this._volume.bindStreams(entry.streams);
+        this._volumeSource.bindStreams(entry.streams);
     }
 
     activate(event) {
@@ -546,6 +534,8 @@ class EarfulIndicator extends PanelMenu.Button {
             'changed::hide-when-idle', () => this._syncPanel(),
             'changed::show-audio-only-apps', () => this._syncOthers(),
             'changed::menu-style', () => this._queueRebuild(),
+            'changed::card-layout', () => this._queueRebuild(),
+            'changed::card-volume-style', () => this._queueRebuild(),
             'changed::menu-background', () => this._syncBackground(),
             'changed::design', () => this._syncBackground(),
             'changed::design-color', () => this._syncBackground(),
