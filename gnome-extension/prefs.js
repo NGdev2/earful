@@ -13,6 +13,20 @@ import * as BridgeSetup from './lib/bridgeSetup.js';
 const CHROME_ADDON = 'https://chromewebstore.google.com/detail/hlomkcgmmialafamfkkpiamgefhlidll';
 const FIREFOX_ADDON = 'https://addons.mozilla.org/firefox/addon/earful-bridge/';
 
+/** Opens the store page in that browser itself, else in the default one. */
+function openIn(browser, uri, window) {
+    const program = BridgeSetup.browserProgram(browser);
+    if (program) {
+        try {
+            Gio.Subprocess.new([program, uri], Gio.SubprocessFlags.NONE);
+            return;
+        } catch (e) {
+            logError(e, `Earful: could not start ${browser}`);
+        }
+    }
+    new Gtk.UriLauncher({uri}).launch(window, null, null);
+}
+
 /** "Connected: Google Chrome, Firefox · ready for 5 more" and the like. */
 function browsersSummary(enabled, connected, total) {
     if (!enabled)
@@ -524,13 +538,12 @@ export default class EarfulPreferences extends ExtensionPreferences {
             else if (enabled && name in seen)
                 subtitle = _('Add-on connected');
             else if (enabled)
-                subtitle = _('Add-on not installed yet');
+                subtitle = _('Not seen yet. Add the add-on, or play something there to check.');
             const row = new Adw.ActionRow({title: GLib.markup_escape_text(name, -1), subtitle});
             if (enabled && registered && !(name in seen) && !(isFirefox && blocked)) {
                 const get = new Gtk.Button({label: _('Get the add-on'), valign: Gtk.Align.CENTER});
-                get.connect('clicked', () => new Gtk.UriLauncher({
-                    uri: isFirefox ? FIREFOX_ADDON : CHROME_ADDON,
-                }).launch(this._window, null, null));
+                get.connect('clicked', () => openIn(name, isFirefox ? FIREFOX_ADDON : CHROME_ADDON,
+                    this._window));
                 row.add_suffix(get);
             }
             if (enabled && name in seen)

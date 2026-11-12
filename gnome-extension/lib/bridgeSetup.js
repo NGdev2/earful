@@ -42,6 +42,21 @@ const CHROMIUM_BROWSERS = [
     {id: 'opera', name: 'Opera', dir: 'opera', programs: ['opera']},
 ];
 
+/**
+ * The program that opens this browser (by its name in Settings), or null.
+ * Snap Firefox counts: it opens pages fine, only its helper needs the portal.
+ */
+export function browserProgram(name, findProgram = n => GLib.find_program_in_path(n)) {
+    const programs = name === 'Firefox' ? ['firefox', 'firefox-esr']
+        : CHROMIUM_BROWSERS.find(b => b.name === name)?.programs ?? [];
+    for (const program of programs) {
+        const path = findProgram(program);
+        if (path)
+            return path;
+    }
+    return null;
+}
+
 function sandboxed(path) {
     return path.startsWith('/snap/') || path.includes('/flatpak/');
 }

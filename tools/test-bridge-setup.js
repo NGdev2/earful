@@ -177,5 +177,16 @@ function cleanup(root) {
     cleanup(root);
 }
 
+// "Get the add-on" opens the store in that browser itself.
+{
+    const installed = {'brave-browser': '/usr/bin/brave-browser', 'firefox': '/snap/bin/firefox'};
+    const find = name => installed[name] ?? null;
+    check(Setup.browserProgram('Brave', find) === '/usr/bin/brave-browser', 'Brave opens with its own program');
+    check(Setup.browserProgram('Firefox', find) === '/snap/bin/firefox', 'Snap Firefox opens pages too');
+    check(Setup.browserProgram('Opera', find) === null, 'a browser without a program falls back to the default');
+    check(Setup.browserName('/opt/brave.com/brave/brave', 'Chromium') === 'Brave', 'the helper tells Brave by its program');
+    check(Setup.browserName('/opt/vivaldi/vivaldi-bin', 'Chromium') === 'Vivaldi', 'and Vivaldi, which says Chromium');
+}
+
 print(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 exit(failures ? 1 : 0);
