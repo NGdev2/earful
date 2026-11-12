@@ -15,9 +15,23 @@ import {EarfulIndicator} from './lib/panel.js';
 import {PauseOthers} from './lib/pauseOthers.js';
 import {ToastManager} from './lib/toasts.js';
 
+// 0.3.0 gave popups a design of their own: start it from the shared one,
+// so an update changes nothing on screen.
+function migrateSettings(settings) {
+    if (settings.get_int('settings-version') >= 1)
+        return;
+    for (const key of ['design', 'design-color', 'design-opacity']) {
+        const value = settings.get_user_value(key);
+        if (value)
+            settings.set_value(`popup-${key}`, value);
+    }
+    settings.set_int('settings-version', 1);
+}
+
 export default class EarfulExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
+        migrateSettings(this._settings);
         this._manager = new PlayerManager();
         this._audio = new AudioManager(this._manager);
         this._toasts = new ToastManager(this._settings, this._manager);

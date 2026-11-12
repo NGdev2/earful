@@ -11,7 +11,7 @@ import * as BridgeSetup from './lib/bridgeSetup.js';
 
 // Where to get the Earful Bridge add-on.
 const ADDON_PAGES = [
-    [() => _('Chrome, Brave, Edge'), 'https://github.com/NGdev2/earful#browser-tabs-as-separate-players-optional'],
+    [() => _('Chrome, Brave, Edge'), 'https://chromewebstore.google.com/detail/hlomkcgmmialafamfkkpiamgefhlidll'],
     [() => _('Firefox'), 'https://addons.mozilla.org/firefox/addon/earful-bridge/'],
 ];
 // The shell (re)registers the helper when the switch changes; let it finish first.
@@ -234,90 +234,140 @@ export default class EarfulPreferences extends ExtensionPreferences {
         const settings = this.getSettings();
         window.set_default_size(620, 760);
 
-        const page = new Adw.PreferencesPage();
-        window.add(page);
-
-        // Look
-        const look = new Adw.PreferencesGroup({
-            title: _('Look'),
-            description: _('Make the menu and popups yours.'),
+        // Three pages: how the menu looks, the popups, and how Earful behaves.
+        const menuPage = new Adw.PreferencesPage({
+            title: _('Menu'),
+            icon_name: 'view-list-symbolic',
         });
-        page.add(look);
-        look.add(choiceRow(window, settings, 'menu-style', _('Menu style'), MENU_STYLES));
+        const popupPage = new Adw.PreferencesPage({
+            title: _('Popups'),
+            icon_name: 'emblem-music-symbolic',
+        });
+        const page = new Adw.PreferencesPage({
+            title: _('Behaviour'),
+            icon_name: 'emblem-system-symbolic',
+        });
+        window.add(menuPage);
+        window.add(popupPage);
+        window.add(page);
+        // Greys out options that don't apply; runs again when these keys change.
+        const follow = (keys, sync) => {
+            sync();
+            const ids = keys.map(key => settings.connect(`changed::${key}`, sync));
+            window.connect('close-request', () => ids.forEach(id => settings.disconnect(id)));
+        };
+
+        // Menu: style and layout
+        const layout = new Adw.PreferencesGroup({
+            title: _('Players'),
+            description: _('How each player looks in the top bar menu.'),
+        });
+        menuPage.add(layout);
+        layout.add(choiceRow(window, settings, 'menu-style', _('Menu style'), MENU_STYLES));
         const cardLayout = choiceRow(window, settings, 'card-layout', _('Card layout'),
             CARD_LAYOUTS, _('The progress bar and where the volume sits.'));
         const volumeStyle = choiceRow(window, settings, 'card-volume-style',
             _('Volume style'), VOLUME_STYLES);
-        const coverAnimation = choiceRow(window, settings, 'cover-volume-animation',
-            _('Cover animation'), COVER_ANIMATIONS,
-            _('Scroll on the cover to change the volume.'));
         const listLayout = choiceRow(window, settings, 'list-layout', _('List layout'),
             LIST_LAYOUTS, _('The progress bar and where the volume sits.'));
         const barsOrder = choiceRow(window, settings, 'list-bars-order',
             _('Bars'), LIST_BARS_ORDERS);
-        look.add(cardLayout);
-        look.add(volumeStyle);
-        look.add(listLayout);
-        look.add(barsOrder);
-        look.add(coverAnimation);
-        // Each option only matters for the layouts that use it.
-        const syncCards = () => {
-            const style = settings.get_string('menu-style');
-            const cards = style === 'cards', list = style === 'list';
-            const layout = settings.get_string('card-layout');
-            const rowLayout = settings.get_string('list-layout');
-            cardLayout.sensitive = cards;
-            volumeStyle.sensitive = cards &&
-                ['standing-volume', 'side-volume'].includes(layout);
-            listLayout.sensitive = list;
-            barsOrder.sensitive = list && rowLayout === 'two-bars';
-            coverAnimation.sensitive = (cards && layout === 'cover-volume') ||
-                (list && rowLayout === 'cover-volume');
-        };
-        syncCards();
-        const cardIds = ['menu-style', 'card-layout', 'list-layout'].map(key =>
-            settings.connect(`changed::${key}`, syncCards));
-        window.connect('close-request', () => cardIds.forEach(id => settings.disconnect(id)));
-        look.add(choiceRow(window, settings, 'menu-background', _('Menu background'),
-            MENU_BACKGROUNDS, _('Match the music takes the colors of the song that is playing.')));
-        look.add(choiceRow(window, settings, 'design', _('Design'), DESIGNS,
-            _('Popups and cards. Scenes like Vinyl move while music plays.')));
+        const coverAnimation = choiceRow(window, settings, 'cover-volume-animation',
+            _('Cover animation'), COVER_ANIMATIONS,
+            _('Scroll on the cover to change the volume.'));
+        for (const row of [cardLayout, volumeStyle, listLayout, barsOrder, coverAnimation])
+            layout.add(row);
+
+        // Menu: colors
+        const look = new Adw.PreferencesGroup({title: _('Look')});
+        menuPage.add(look);
+        const design = choiceRow(window, settings, 'design', _('Card design'), DESIGNS,
+            _('Scenes like Vinyl move while music plays.'));
         const color = choiceRow(window, settings, 'design-color', _('Color'), COLORS);
         const opacity = spinRow(settings, 'design-opacity', _('Opacity (%)'), 40, 100);
-        // The system theme brings its own colors and background.
-        const syncDesign = () => {
-            const own = settings.get_string('design') !== 'system';
-            color.sensitive = own;
-            opacity.sensitive = own;
-        };
-        syncDesign();
-        const designId = settings.connect('changed::design', syncDesign);
-        window.connect('close-request', () => settings.disconnect(designId));
+        look.add(design);
         look.add(color);
         look.add(opacity);
-        look.add(switchRow(settings, 'animations', _('Animations'),
-            _('Moving scenes and little dancing bars while music plays.')));
+        look.add(choiceRow(window, settings, 'menu-background', _('Menu background'),
+            MENU_BACKGROUNDS, _('Match the music takes the colors of the song that is playing.')));
+
+        // Each option only matters where it is used.
+        follow(['menu-style', 'card-layout', 'list-layout', 'design', 'menu-background'], () => {
+            const style = settings.get_string('menu-style');
+            const cards = style === 'cards', list = style === 'list';
+            const card = settings.get_string('card-layout');
+            const row = settings.get_string('list-layout');
+            cardLayout.sensitive = cards;
+            volumeStyle.sensitive = cards && ['standing-volume', 'side-volume'].includes(card);
+            listLayout.sensitive = list;
+            barsOrder.sensitive = list && row === 'two-bars';
+            coverAnimation.sensitive = (cards && card === 'cover-volume') ||
+                (list && row === 'cover-volume');
+            // Only cards are painted; the color and opacity also tint a
+            // dark or music-colored menu background.
+            design.sensitive = cards;
+            const painted = cards && settings.get_string('design') !== 'system';
+            const tinted = ['dark', 'music'].includes(settings.get_string('menu-background'));
+            color.sensitive = painted || tinted;
+            opacity.sensitive = painted || tinted;
+        });
 
         // Popups
         const popups = new Adw.PreferencesGroup({
             title: _('Now playing popups'),
             description: _('A small card that fades out when a new track starts.'),
         });
-        page.add(popups);
-
+        popupPage.add(popups);
         popups.add(switchRow(settings, 'toasts-enabled', _('Show popups')));
-        popups.add(choiceRow(window, settings, 'toast-position', _('Position'), POSITIONS));
-        popups.add(spinRow(settings, 'toast-duration', _('Seconds on screen'), 2, 30));
-        popups.add(spinRow(settings, 'toast-max-visible', _('Maximum at once'), 1, 6));
-        popups.add(switchRow(settings, 'toast-shadow', _('Shadow')));
-        popups.add(switchRow(settings, 'toast-hide-when-app-focused',
+        const popupRows = [
+            choiceRow(window, settings, 'toast-position', _('Position'), POSITIONS),
+            spinRow(settings, 'toast-duration', _('Seconds on screen'), 2, 30),
+            spinRow(settings, 'toast-max-visible', _('Maximum at once'), 1, 6),
+        ];
+        popupRows.forEach(row => popups.add(row));
+
+        const popupLook = new Adw.PreferencesGroup({title: _('Look')});
+        popupPage.add(popupLook);
+        const popupDesign = choiceRow(window, settings, 'popup-design', _('Design'), DESIGNS,
+            _('Scenes like Vinyl move while music plays.'));
+        const popupColor = choiceRow(window, settings, 'popup-design-color', _('Color'), COLORS);
+        const popupOpacity = spinRow(settings, 'popup-design-opacity', _('Opacity (%)'), 40, 100);
+        const shadow = switchRow(settings, 'toast-shadow', _('Shadow'));
+        [popupDesign, popupColor, popupOpacity, shadow].forEach(row => popupLook.add(row));
+
+        const skip = new Adw.PreferencesGroup({title: _('When to stay quiet')});
+        popupPage.add(skip);
+        skip.add(switchRow(settings, 'toast-hide-when-app-focused',
             _('Skip when the player is in front'),
             _('You already see what is playing.')));
-        popups.add(switchRow(settings, 'toast-hide-in-fullscreen',
+        skip.add(switchRow(settings, 'toast-hide-in-fullscreen',
             _('Skip over fullscreen windows'),
             _('Games, movies and presentations stay clean.')));
-        popups.add(switchRow(settings, 'toast-respect-dnd',
+        skip.add(switchRow(settings, 'toast-respect-dnd',
             _('Follow Do Not Disturb')));
+
+        // Per app
+        const apps = new Adw.PreferencesGroup({
+            title: _('Popups per player'),
+            description: _('Turn popups off for players you do not care about. Start a player to see it here.'),
+        });
+        popupPage.add(apps);
+
+        follow(['toasts-enabled', 'popup-design'], () => {
+            const on = settings.get_boolean('toasts-enabled');
+            popupRows.forEach(row => (row.sensitive = on));
+            [popupLook, skip, apps].forEach(group => (group.sensitive = on));
+            // The system theme brings its own colors and background.
+            const own = settings.get_string('popup-design') !== 'system';
+            popupColor.sensitive = own;
+            popupOpacity.sensitive = own;
+        });
+
+        // Behaviour
+        const general = new Adw.PreferencesGroup({title: _('Motion')});
+        page.add(general);
+        general.add(switchRow(settings, 'animations', _('Animations'),
+            _('Moving scenes and little dancing bars while music plays, in the menu and in popups.')));
 
         // Focus mode
         const focus = new Adw.PreferencesGroup({
@@ -353,7 +403,9 @@ export default class EarfulPreferences extends ExtensionPreferences {
         page.add(panel);
         panel.add(switchRow(settings, 'show-panel-label',
             _('Show the playing track next to the icon')));
-        panel.add(spinRow(settings, 'panel-label-max-chars', _('Label length'), 10, 80));
+        const labelLength = spinRow(settings, 'panel-label-max-chars', _('Label length'), 10, 80);
+        settings.bind('show-panel-label', labelLength, 'sensitive', Gio.SettingsBindFlags.GET);
+        panel.add(labelLength);
         panel.add(switchRow(settings, 'hide-when-idle',
             _('Hide the button when nothing is playing')));
         panel.add(switchRow(settings, 'show-audio-only-apps',
@@ -414,13 +466,6 @@ export default class EarfulPreferences extends ExtensionPreferences {
         });
         settings.bind('pause-others', keep, 'sensitive', Gio.SettingsBindFlags.GET);
         page.add(keep);
-
-        // Per app
-        const apps = new Adw.PreferencesGroup({
-            title: _('Popups per player'),
-            description: _('Turn popups off for players you do not care about. Start a player to see it here.'),
-        });
-        page.add(apps);
 
         this._fillPlayers(settings, keep, apps).catch(e =>
             logError(e, 'Earful: could not list players'));

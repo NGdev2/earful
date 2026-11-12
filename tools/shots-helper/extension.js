@@ -149,22 +149,22 @@ export default class ShotsHelper extends Extension {
         settings.reset('menu-style');
         await this._manyPlayers(earful);
         for (const design of ['cover', 'vinyl', 'road']) {
-            settings.set_string('design', design);
+            settings.set_string('popup-design', design);
             await wait(3500);
             await shot(`popups-${design}`);
         }
         // Mid cross-fade: the shadow must keep its round corners.
-        settings.set_string('design', 'cover');
+        settings.set_string('popup-design', 'cover');
         await wait(3500);
-        settings.set_string('design-color', 'purple');
+        settings.set_string('popup-design-color', 'purple');
         await wait(120);
         await shot('popups-color-change');
-        settings.reset('design-color');
+        settings.reset('popup-design-color');
         settings.set_boolean('toast-shadow', false);
         await wait(1500);
         await shot('popups-no-shadow');
         settings.reset('toast-shadow');
-        settings.reset('design');
+        settings.reset('popup-design');
         await this._closePopup(settings);
         await this._progress(earful);
         await this._cardLayouts(earful);

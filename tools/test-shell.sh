@@ -65,12 +65,16 @@ cat > "$WORK/scenario.sh" <<'EOF'
 G="gsettings --schemadir $EXT/schemas"
 K=org.gnome.shell.extensions.earful
 gsettings set org.gnome.shell enabled-extensions "$EXTENSIONS"
+# A user of an older version picked a design: popups keep it after the update.
+$G set $K design vinyl; $G set $K design-color amber
 SHELL_DEBUG=backtrace-warnings gnome-shell --headless --wayland --no-x11 \
     --wayland-display="$WAYLAND_DISPLAY" --virtual-monitor 1280x800 > "$WORK/shell.log" 2>&1 &
 sleep 6
 
 # Browser tabs: Earful registers its helper with the (fake) browsers.
 check() { if eval "$1"; then echo "ok - $2"; else echo "FAIL - $2"; fi >> "$WORK/checks.log"; }
+check '[ "$($G get $K popup-design)" = "'"'"'vinyl'"'"'" ] && [ "$($G get $K popup-design-color)" = "'"'"'amber'"'"'" ] && [ "$($G get $K settings-version)" = 1 ]' "popups keep the design chosen before the update"
+$G reset $K design; $G reset $K design-color; $G reset $K popup-design; $G reset $K popup-design-color
 M=io.github.ngdev2.earful.json
 CHROME="$XDG_CONFIG_HOME/google-chrome/NativeMessagingHosts/$M"
 FIREFOX="$HOME/.mozilla/native-messaging-hosts/$M"

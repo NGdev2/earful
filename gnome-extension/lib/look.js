@@ -25,12 +25,15 @@ const rgba = (c, alpha) => `rgba(${c.join(', ')}, ${alpha.toFixed(2)})`;
 // Mixes a color with white, for hover.
 const lighten = (c, amount) => c.map(v => Math.round(v + (255 - v) * amount));
 
-/** Reads the design settings once per restyle. */
-export function lookFromSettings(settings) {
+/**
+ * Reads the design settings once per restyle: the cards', or with prefix
+ * 'popup-' the popups' own.
+ */
+export function lookFromSettings(settings, prefix = '') {
     return {
-        design: settings.get_string('design'),
-        color: settings.get_string('design-color'),
-        opacity: settings.get_int('design-opacity') / 100,
+        design: settings.get_string(`${prefix}design`),
+        color: settings.get_string(`${prefix}design-color`),
+        opacity: settings.get_int(`${prefix}design-opacity`) / 100,
         animate: settings.get_boolean('animations'),
     };
 }

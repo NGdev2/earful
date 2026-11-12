@@ -106,9 +106,9 @@ const Toast = GObject.registerClass({
                 this._restyle();
         });
         settings.connectObject(
-            'changed::design', () => this._restyle(),
-            'changed::design-color', () => this._restyle(),
-            'changed::design-opacity', () => this._restyle(),
+            'changed::popup-design', () => this._restyle(),
+            'changed::popup-design-color', () => this._restyle(),
+            'changed::popup-design-opacity', () => this._restyle(),
             'changed::animations', () => this._restyle(),
             'changed::toast-shadow', () => this._syncShadow(),
             this);
@@ -146,7 +146,7 @@ const Toast = GObject.registerClass({
         // new layout of a widget about to be removed.
         if (this.dismissing)
             return;
-        const look = Look.lookFromSettings(this._settings);
+        const look = Look.lookFromSettings(this._settings, 'popup-');
         const palette = this._art.palette;
         this._surface.style = Look.surfaceStyle(look, palette, this.hover);
         this._scene.update(look, palette, this.player.isPlaying);
