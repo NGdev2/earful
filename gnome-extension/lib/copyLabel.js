@@ -13,6 +13,8 @@ import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js'
 // Sliding: wait, move at this speed to the end, wait, jump back, repeat.
 const HOLD_MS = 1200;
 const PIXELS_PER_SECOND = 40;
+// GNOME 51 renamed ButtonMask.ONE to PRIMARY.
+const PRIMARY_BUTTON = St.ButtonMask.PRIMARY ?? St.ButtonMask.ONE;
 // How long the check mark stays after copying.
 const COPIED_MS = 1200;
 
@@ -36,7 +38,7 @@ class CopyLabel extends St.Button {
             reactive: true,
             // Without copying the button takes no clicks, so they reach the
             // row (which raises the player); hover still works for sliding.
-            button_mask: copy ? St.ButtonMask.ONE : 0,
+            button_mask: copy ? PRIMARY_BUTTON : 0,
             can_focus: copy,
             track_hover: true,
             accessible_name: copy ? _('Copy') : '',

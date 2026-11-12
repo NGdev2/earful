@@ -201,13 +201,17 @@ export default class ShotsHelper extends Extension {
             Main.layoutManager.uiGroup.add_child(long);
             long.text = 'A very long title that cannot fit in the card, so it slides to show the rest';
             await wait(300);
-            result.push(`slideinfo ${long._overflow()}`);
+            // Containers render in software, where GNOME turns animations off.
+            const forced = global.force_animations;
+            global.force_animations = true;
+            result.push(`slideinfo ${long._overflow()} ${St.Settings.get().enable_animations}`);
             long._startScroll();
             await wait(HOLD_MS_TEST);
             result.push(`slide ${long.textLabel.translation_x < 0}`);
             long._stopScroll();
             result.push(`back ${long.textLabel.translation_x === 0}`);
             long.destroy();
+            global.force_animations = forced;
             await shot('copy-cards');
             earful.menu.close(false);
             await wait(400);
