@@ -128,6 +128,18 @@ function cleanup(root) {
     cleanup(root);
 }
 
+// 3b. Brave Origin keeps its own folder (reported on Reddit): it gets the
+// helper too, next to regular Brave.
+{
+    const {root, paths} = fakeComputer({programs: {}});
+    mkdir(join(paths.configDir, 'BraveSoftware', 'Brave-Origin'));
+    const result = await Setup.register(paths);
+    check(result.written.includes('Brave Origin'), 'Brave Origin found by its folder', JSON.stringify(result));
+    check(exists(manifest(join(paths.configDir, 'BraveSoftware', 'Brave-Origin', 'NativeMessagingHosts'))),
+        'Brave Origin gets the helper manifest');
+    cleanup(root);
+}
+
 // 4. Firefox folders: Snap creates ~/.mozilla; the new XDG layout doesn't.
 {
     const snap = fakeComputer({snapFirefox: true});
@@ -186,6 +198,8 @@ function cleanup(root) {
     check(Setup.browserProgram('Opera', find) === null, 'a browser without a program falls back to the default');
     check(Setup.browserName('/opt/brave.com/brave/brave', 'Chromium') === 'Brave', 'the helper tells Brave by its program');
     check(Setup.browserName('/opt/vivaldi/vivaldi-bin', 'Chromium') === 'Vivaldi', 'and Vivaldi, which says Chromium');
+    check(Setup.browserName('/opt/brave.com/brave-origin/brave', 'Brave') === 'Brave Origin',
+        'Brave Origin is told apart from Brave');
 }
 
 print(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
