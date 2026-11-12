@@ -11,6 +11,7 @@ import GLib from 'gi://GLib';
 import GLibUnix from 'gi://GLibUnix';
 
 import * as Artwork from './lib/artwork.js';
+import {browserName, markSeen} from '../lib/bridgeSetup.js';
 import {TabPlayer} from './lib/tab-player.js';
 
 const MAX_MESSAGE_SIZE = 64 * 1024 * 1024;
@@ -124,6 +125,12 @@ function handle(message) {
         // same for every Firefox; our own pid keeps the names apart.
         if (browser.name === 'Firefox')
             browser.pid = new Gio.Credentials().get_unix_pid();
+        // Settings shows this browser as connected from now on.
+        try {
+            markSeen(browserName(readLink(`/proc/${parentPid()}/exe`), browser.name));
+        } catch (e) {
+            log(`could not note the browser: ${e.message}`);
+        }
         for (const player of players.values())
             player.publish();
         send({type: 'ready'});

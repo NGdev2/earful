@@ -14,12 +14,16 @@ import {exit, programArgs} from 'system';
 const SELF = GLib.filename_from_uri(import.meta.url)[0];
 const HOST = GLib.build_filenamev([GLib.path_get_dirname(SELF), '..', 'gnome-extension', 'bridge', 'earful-host.js']);
 const PRIVATE_FLAG = '--on-private-bus';
+const {readSeen} = await import(
+    `file://${GLib.path_get_dirname(SELF)}/../gnome-extension/lib/bridgeSetup.js`);
 
 if (!programArgs.includes(PRIVATE_FLAG)) {
     // Never touch the real session bus or runtime dir: re-run in a sandbox.
     const runtimeDir = GLib.dir_make_tmp('earful-test-XXXXXX');
     const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
     launcher.setenv('XDG_RUNTIME_DIR', runtimeDir, true);
+    // The helper notes which browsers it served; keep that out of the real home.
+    launcher.setenv('XDG_STATE_HOME', `${runtimeDir}/state`, true);
     launcher.unsetenv('CHROME_DESKTOP');
     // Keep GVfs daemons from starting on the private bus.
     launcher.setenv('GIO_USE_VFS', 'local', true);
@@ -181,6 +185,9 @@ async function testHandshake() {
     send({type: 'hello', browser: {name: 'Google Chrome', desktopEntry: 'google-chrome'}});
     const reply = await nextMessage();
     equal(reply?.type, 'ready', 'hello is answered with ready');
+    check(GLib.get_user_state_dir().startsWith(GLib.get_user_runtime_dir()),
+        'test keeps its state in the throwaway dir');
+    check('Google Chrome' in readSeen(), 'the browser is noted as connected for Settings');
 }
 
 async function testPlayersAppear() {

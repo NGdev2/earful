@@ -10,10 +10,19 @@ import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Ex
 import * as BridgeSetup from './lib/bridgeSetup.js';
 
 // Where to get the Earful Bridge add-on.
-const ADDON_PAGES = [
-    [() => _('Chrome, Brave, Edge'), 'https://chromewebstore.google.com/detail/hlomkcgmmialafamfkkpiamgefhlidll'],
-    [() => _('Firefox'), 'https://addons.mozilla.org/firefox/addon/earful-bridge/'],
-];
+const CHROME_ADDON = 'https://chromewebstore.google.com/detail/hlomkcgmmialafamfkkpiamgefhlidll';
+const FIREFOX_ADDON = 'https://addons.mozilla.org/firefox/addon/earful-bridge/';
+
+/** "Connected: Google Chrome, Firefox · ready for 5 more" and the like. */
+function browsersSummary(enabled, connected, total) {
+    if (!enabled)
+        return _('Off');
+    const rest = total - connected.length;
+    if (connected.length === 0)
+        return _('Ready for %d browsers. Add the add-on to one of them.').format(total);
+    const names = _('Connected: %s').format(connected.join(', '));
+    return rest > 0 ? `${names} · ${_('ready for %d more').format(rest)}` : names;
+}
 // The shell (re)registers the helper when the switch changes; let it finish first.
 const BRIDGE_REFRESH_DELAY_MS = 800;
 
@@ -231,6 +240,7 @@ function addPlayerSwitches(group, settings, key, running, onWhenListed) {
 
 export default class EarfulPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
+        this._window = window;
         const settings = this.getSettings();
         window.set_default_size(620, 760);
 
@@ -420,14 +430,6 @@ export default class EarfulPreferences extends ExtensionPreferences {
         page.add(tabs);
         tabs.add(switchRow(settings, 'browser-bridge', _('Show each tab as its own player'),
             _('Lets the add-on start Earful\'s small helper program.')));
-        const getAddon = new Adw.ActionRow({title: _('Get the add-on')});
-        for (const [label, uri] of ADDON_PAGES) {
-            const button = new Gtk.Button({label: label(), valign: Gtk.Align.CENTER});
-            button.connect('clicked', () =>
-                new Gtk.UriLauncher({uri}).launch(window, null, null));
-            getAddon.add_suffix(button);
-        }
-        tabs.add(getAddon);
         this._browserRows = [];
         const refresh = () => this._fillBrowsers(settings, tabs).catch(e =>
             logError(e, 'Earful: could not check browser tabs'));
@@ -498,16 +500,42 @@ export default class EarfulPreferences extends ExtensionPreferences {
         const byName = new Map();
         for (const browser of found)
             byName.set(browser.name, (byName.get(browser.name) ?? false) || browser.registered);
-        if (byName.size === 0)
+        if (byName.size === 0) {
             add(new Adw.ActionRow({title: _('No supported browser found')}));
+            return;
+        }
+
+        // Where the add-on has already reached Earful, and where it hasn't yet.
+        const seen = BridgeSetup.readSeen();
+        const connected = [...byName.keys()].filter(name => name in seen);
+        const browsers = new Adw.ExpanderRow({
+            title: _('Browsers'),
+            subtitle: browsersSummary(enabled, connected, byName.size),
+        });
+        add(browsers);
+
         for (const [name, registered] of byName) {
-            let subtitle = enabled ? _('Ready. Add the add-on to this browser.') : _('Off');
+            const isFirefox = name === 'Firefox';
+            let subtitle = _('Off');
             if (enabled && !registered)
                 subtitle = _('Could not set up. Restart your computer to try again.');
-            if (name === 'Firefox' && enabled && blocked)
+            else if (enabled && isFirefox && blocked)
                 subtitle = _('Firefox is not allowed to start Earful\'s helper.');
+            else if (enabled && name in seen)
+                subtitle = _('Add-on connected');
+            else if (enabled)
+                subtitle = _('Add-on not installed yet');
             const row = new Adw.ActionRow({title: GLib.markup_escape_text(name, -1), subtitle});
-            if (name === 'Firefox' && enabled && blocked) {
+            if (enabled && registered && !(name in seen) && !(isFirefox && blocked)) {
+                const get = new Gtk.Button({label: _('Get the add-on'), valign: Gtk.Align.CENTER});
+                get.connect('clicked', () => new Gtk.UriLauncher({
+                    uri: isFirefox ? FIREFOX_ADDON : CHROME_ADDON,
+                }).launch(this._window, null, null));
+                row.add_suffix(get);
+            }
+            if (enabled && name in seen)
+                row.add_prefix(new Gtk.Image({icon_name: 'emblem-ok-symbolic'}));
+            if (isFirefox && enabled && blocked) {
                 const again = new Gtk.Button({label: _('Ask again'), valign: Gtk.Align.CENTER});
                 again.connect('clicked', async () => {
                     again.sensitive = false;
@@ -521,7 +549,7 @@ export default class EarfulPreferences extends ExtensionPreferences {
                 });
                 row.add_suffix(again);
             }
-            add(row);
+            browsers.add_row(row);
         }
     }
 

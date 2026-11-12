@@ -218,6 +218,63 @@ export async function status(paths, cancellable = null) {
     return list;
 }
 
+// Which browsers the add-on has reached the helper from, so Settings can say
+// "connected" rather than only "ready". The helper writes it on each start.
+
+// Parts of a browser's program path, most specific first, and its name in
+// BROWSERS (a Firefox through the desktop portal is told by its hello).
+const PROGRAMS = [
+    ['/chrome-beta/', 'Google Chrome Beta'],
+    ['/chrome-unstable/', 'Google Chrome Dev'],
+    ['/google/chrome/', 'Google Chrome'],
+    ['brave-beta', 'Brave Beta'],
+    ['brave-nightly', 'Brave Nightly'],
+    ['brave', 'Brave'],
+    ['msedge-beta', 'Microsoft Edge Beta'],
+    ['msedge-dev', 'Microsoft Edge Dev'],
+    ['msedge', 'Microsoft Edge'],
+    ['vivaldi-snapshot', 'Vivaldi Snapshot'],
+    ['vivaldi', 'Vivaldi'],
+    ['opera', 'Opera'],
+    ['chromium', 'Chromium'],
+    ['firefox', 'Firefox'],
+];
+
+/**
+ * The browser's name as Settings lists it, from the program that started the
+ * helper, else from the name the add-on sent.
+ */
+export function browserName(program, helloName) {
+    const found = PROGRAMS.find(([part]) => program.includes(part));
+    if (helloName === 'Firefox' || !found)
+        return helloName || 'Chromium';
+    return found[1];
+}
+
+function seenFile(stateDir) {
+    return GLib.build_filenamev([stateDir, 'earful', 'bridge-seen.json']);
+}
+
+/** {name: unix seconds} of each browser the add-on was last seen in. */
+export function readSeen(stateDir = GLib.get_user_state_dir()) {
+    try {
+        const [, contents] = GLib.file_get_contents(seenFile(stateDir));
+        const seen = JSON.parse(new TextDecoder().decode(contents));
+        return seen && typeof seen === 'object' ? seen : {};
+    } catch {
+        return {};
+    }
+}
+
+/** Notes that the add-on just reached the helper from this browser. */
+export function markSeen(name, stateDir = GLib.get_user_state_dir()) {
+    const seen = readSeen(stateDir);
+    seen[name] = Math.floor(Date.now() / 1000);
+    const file = seenFile(stateDir);
+    GLib.mkdir_with_parents(GLib.path_get_dirname(file), 0o700);
+    GLib.file_set_contents(file, JSON.stringify(seen));
+}
+
 // Keeps the registrations in line with the browser-bridge setting while the
 // extension is enabled.
 export class BridgeSync {
