@@ -133,6 +133,7 @@ if [ -n "$SHOTS" ]; then
     check 'grep -qx "shown true" "$P" && grep -qx "length 4:00" "$P"' "progress bar shows for a player with a length"
     check 'grep -qx "advances true" "$P"' "elapsed time advances"
     check 'grep -qx "seek true" "$P"' "dragging the bar seeks the player"
+    check 'grep -qx "wheel true" "$P"' "the mouse wheel on the time bar doesn't seek"
     check 'grep -qx "nobar true" "$P"' "no bar for a player without a length"
     check 'grep -qx "clockruns true" "$P"' "the progress clock runs while the menu is open"
     check 'grep -qx "clockstops true" "$P"' "the progress clock stops when the menu closes"

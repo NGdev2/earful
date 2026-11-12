@@ -2,13 +2,14 @@
 // Progress and volume under the text of a list row: one line that does both, or two bars side by side.
 
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 
-import {formatTime} from './progress.js';
+import {KEY_SEEK_DELAY_MS, SeekSlider, formatTime} from './progress.js';
 import {volumeIcon} from './volume.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -56,7 +57,13 @@ class SeekBar {
         this._updating = false;
         this._onText = onText;
 
-        this.slider = new Slider.Slider(0);
+        this.slider = new SeekSlider(0);
+        this._keySeekId = 0;
+        this.slider.connect('destroy', () => {
+            if (this._keySeekId)
+                GLib.source_remove(this._keySeekId);
+            this._keySeekId = 0;
+        });
         this.slider.accessible_name = _('Position');
         this.slider.y_align = Clutter.ActorAlign.CENTER;
         this.slider.connect('notify::value', () => this._onSliderChanged());
@@ -83,8 +90,8 @@ class SeekBar {
     /** Moves the bar to the player's position. */
     sync() {
         const length = this.length;
-        // While dragging, the bar and the text follow the handle instead.
-        if (length <= 0 || this.dragging)
+        // While dragging (or keys wait to seek), the bar and text follow the handle.
+        if (length <= 0 || this.dragging || this._keySeekId)
             return;
         const position = this.player.position;
         this._updating = true;
@@ -108,7 +115,15 @@ class SeekBar {
             this._onText(`${formatTime(this.slider.value * length)} / ${formatTime(length)}`);
             return;
         }
-        this._seek(this.slider.value);
+        // Arrow keys: one seek once they stop, not one per key repeat.
+        this._onText(`${formatTime(this.slider.value * this.length)} / ${formatTime(this.length)}`);
+        if (this._keySeekId)
+            GLib.source_remove(this._keySeekId);
+        this._keySeekId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, KEY_SEEK_DELAY_MS, () => {
+            this._keySeekId = 0;
+            this._seek(this.slider.value);
+            return GLib.SOURCE_REMOVE;
+        });
     }
 }
 

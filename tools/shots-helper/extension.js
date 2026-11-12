@@ -419,6 +419,8 @@ export default class ShotsHelper extends Extension {
             result.push(`advances ${!!bar && (bar.elapsedLabel.text !== elapsed ||
                 item.player.position > position)}`);
 
+            // The wheel scrolls the menu; it must never seek (each step would).
+            result.push(`wheel ${bar?.slider.vfunc_scroll_event(null) === Clutter.EVENT_PROPAGATE}`);
             bar?.seekTo(0.5);
             await wait(1200);
             result.push(`seek ${this._seeked(log, name)}`);

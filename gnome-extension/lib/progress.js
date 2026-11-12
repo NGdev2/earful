@@ -2,12 +2,27 @@
 // Track progress: elapsed time, a bar that can be dragged to seek, and the length.
 
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+// Keys held on a bar seek once, this long after the last press.
+export const KEY_SEEK_DELAY_MS = 400;
+
+/**
+ * A slider for the track position. The mouse wheel is left to the menu: every
+ * wheel step would be a seek, and players buffer on each one.
+ */
+export const SeekSlider = GObject.registerClass(
+class SeekSlider extends Slider.Slider {
+    vfunc_scroll_event() {
+        return Clutter.EVENT_PROPAGATE;
+    }
+});
 
 /** 75 -> "1:15", 3725 -> "1:02:05". */
 export function formatTime(seconds) {
@@ -47,7 +62,8 @@ class ProgressBar extends St.BoxLayout {
         });
         this.add_child(this.elapsedLabel);
 
-        this.slider = new Slider.Slider(0);
+        this.slider = new SeekSlider(0);
+        this._keySeekId = 0;
         this.slider.accessible_name = _('Position');
         this.slider.x_expand = true;
         this.slider.y_align = Clutter.ActorAlign.CENTER;
@@ -69,6 +85,9 @@ class ProgressBar extends St.BoxLayout {
         this.setExpanded(!edge);
 
         this.connect('destroy', () => {
+            if (this._keySeekId)
+                GLib.source_remove(this._keySeekId);
+            this._keySeekId = 0;
             this._player?.disconnectObject(this);
             this._player = null;
         });
@@ -118,8 +137,8 @@ class ProgressBar extends St.BoxLayout {
         this.slider.reactive = player.canSeek;
         this.slider.can_focus = player.canSeek;
         this.lengthLabel.text = formatTime(length);
-        // While dragging, the label follows the handle instead.
-        if (this._dragging)
+        // While dragging (or keys wait to seek), the label follows the handle.
+        if (this._dragging || this._keySeekId)
             return;
         const position = player.position;
         this.elapsedLabel.text = formatTime(position);
@@ -144,7 +163,14 @@ class ProgressBar extends St.BoxLayout {
             this.elapsedLabel.text = formatTime(this.slider.value * this._player.length);
             return;
         }
-        // Keyboard and scroll changes seek right away.
-        this.seekTo(this.slider.value);
+        // Arrow keys: one seek once they stop, not one per key repeat.
+        this.elapsedLabel.text = formatTime(this.slider.value * this._player.length);
+        if (this._keySeekId)
+            GLib.source_remove(this._keySeekId);
+        this._keySeekId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, KEY_SEEK_DELAY_MS, () => {
+            this._keySeekId = 0;
+            this.seekTo(this.slider.value);
+            return GLib.SOURCE_REMOVE;
+        });
     }
 });
