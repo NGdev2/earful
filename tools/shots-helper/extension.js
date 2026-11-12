@@ -387,8 +387,15 @@ export default class ShotsHelper extends Extension {
             // A player that jumps without telling: the 5 s re-reading finds it.
             const silent = itemOf('Silent');
             this._setPosition(silent?.player, 'Silent', 100);
-            await wait(6000);
-            result.push(`reread ${!!silent && Math.abs(silent.player.position - 106) < 3}`);
+            // GNOME may run the one-second clock a little late; allow up to 8 s.
+            const jumpedAt = GLib.get_monotonic_time();
+            const found = () => {
+                const expected = 100 + (GLib.get_monotonic_time() - jumpedAt) / 1e6;
+                return !!silent && Math.abs(silent.player.position - expected) < 3;
+            };
+            for (let i = 0; i < 16 && !found(); i++)
+                await wait(500);
+            result.push(`reread ${found()}`);
             await close();
             result.push(`clockstops ${!earful._clockId}`);
 

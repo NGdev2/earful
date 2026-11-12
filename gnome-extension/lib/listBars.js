@@ -122,6 +122,10 @@ class VolumeControl {
         this._onValue = onValue;
         this.dragging = false;
         this._updating = false;
+        // An icon shown instead of the speaker, e.g. a clock while the line
+        // under it is the track time (SwapLine).
+        this._iconOverride = null;
+        this._value = 0;
 
         this._icon = new St.Icon({style_class: `${prefix}-icon`});
         this.button = new St.Button({
@@ -177,8 +181,15 @@ class VolumeControl {
         this._onValue(value);
     }
 
+    /** Shows `iconName` instead of the speaker, or the speaker again (null). */
+    setIconOverride(iconName) {
+        this._iconOverride = iconName;
+        this._syncIcon(this._value);
+    }
+
     _syncIcon(value) {
-        this._icon.icon_name = volumeIcon(value);
+        this._value = value;
+        this._icon.icon_name = this._iconOverride ?? volumeIcon(value);
         this.button.accessible_name = value > 0 ? _('Mute') : _('Unmute');
     }
 }
@@ -195,8 +206,9 @@ function styleSliders(sliders, style) {
 }
 
 /**
- * One line, two jobs: [speaker][line]. The line is the track's progress;
- * pointing at the speaker turns it into the volume until the pointer leaves
+ * One line, two jobs: [icon][line]. The line is the track's progress, with a
+ * clock icon; pointing at the icon turns it into the volume (and the icon into
+ * the speaker) until the pointer leaves
  * the whole widget. Clicking the speaker mutes. With no track length the
  * line is always the volume; with no volume it is only the progress and the
  * speaker is gone; with neither the widget hides.
@@ -322,6 +334,9 @@ class SwapLine extends St.BoxLayout {
         // Only the visible line takes the pointer and the key focus.
         vol.reactive = vol.can_focus = volume;
         seek.reactive = seek.can_focus = !volume && this._seek.canSeek;
+        // The icon says what the line is: a clock for the time, the speaker
+        // for the volume. Pointing at it still brings the volume.
+        this._volume.setIconOverride(volume ? null : CLOCK_ICON);
         if (volume === this._showingVolume)
             return;
         this._showingVolume = volume;
