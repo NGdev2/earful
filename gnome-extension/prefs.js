@@ -299,8 +299,23 @@ export default class EarfulPreferences extends ExtensionPreferences {
         const coverAnimation = choiceRow(window, settings, 'cover-volume-animation',
             _('Cover animation'), COVER_ANIMATIONS,
             _('Scroll on the cover to change the volume.'));
-        for (const row of [cardLayout, volumeStyle, listLayout, barsOrder, coverAnimation])
+        // One switch for copying, following the menu style shown.
+        const copyRow = new Adw.SwitchRow({
+            title: _('Copy on hover'),
+            subtitle: _('Click a title or artist to copy it.'),
+        });
+        const scrollRow = switchRow(settings, 'scroll-titles', _('Slide long titles'),
+            _('Pointing at a long title shows its end.'));
+        for (const row of [cardLayout, volumeStyle, listLayout, barsOrder, coverAnimation,
+            copyRow, scrollRow])
             layout.add(row);
+        const copyKey = () => settings.get_string('menu-style') === 'list'
+            ? 'copy-on-hover-list' : 'copy-on-hover-cards';
+        copyRow.connect('notify::active', () => {
+            if (settings.get_string('menu-style') !== 'compact' &&
+                settings.get_boolean(copyKey()) !== copyRow.active)
+                settings.set_boolean(copyKey(), copyRow.active);
+        });
 
         // Menu: colors
         const look = new Adw.PreferencesGroup({title: _('Look')});
@@ -316,8 +331,13 @@ export default class EarfulPreferences extends ExtensionPreferences {
             MENU_BACKGROUNDS, _('Match the music takes the colors of the song that is playing.')));
 
         // Each option only matters where it is used.
-        follow(['menu-style', 'card-layout', 'list-layout', 'design', 'menu-background'], () => {
+        follow(['menu-style', 'card-layout', 'list-layout', 'design', 'menu-background',
+            'copy-on-hover-cards', 'copy-on-hover-list'], () => {
             const style = settings.get_string('menu-style');
+            // Compact rows have nothing to copy or slide.
+            copyRow.sensitive = style !== 'compact';
+            scrollRow.sensitive = style !== 'compact';
+            copyRow.active = style !== 'compact' && settings.get_boolean(copyKey());
             const cards = style === 'cards', list = style === 'list';
             const card = settings.get_string('card-layout');
             const row = settings.get_string('list-layout');

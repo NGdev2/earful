@@ -16,6 +16,7 @@ import {ensureActorVisibleInScrollView} from 'resource:///org/gnome/shell/misc/a
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
 import {ProgressBar} from './progress.js';
+import {CopyLabel} from './copyLabel.js';
 import {VolumeSource, volumeIcon} from './volume.js';
 import {VerticalVolume} from './volumeStyles.js';
 import {CoverVolume} from './coverVolume.js';
@@ -193,8 +194,17 @@ const PlayerItem = GObject.registerClass({
         });
         // Compact rows have no source line.
         this._source = style === 'compact' ? null : new SourceLine('earful-source');
-        this._title = new St.Label({style_class: 'earful-title'});
-        this._artist = new St.Label({style_class: 'earful-artist'});
+        if (style === 'compact') {
+            this._title = new St.Label({style_class: 'earful-title'});
+            this._artist = new St.Label({style_class: 'earful-artist'});
+        } else {
+            // Copy with a click (cards by default, list when asked) and let
+            // long titles slide on hover.
+            const copy = settings.get_boolean(`copy-on-hover-${style}`);
+            const scroll = settings.get_boolean('scroll-titles');
+            this._title = new CopyLabel({styleClass: 'earful-title', copy, scroll});
+            this._artist = new CopyLabel({styleClass: 'earful-artist', copy, scroll});
+        }
         if (this._source)
             text.add_child(this._source);
         text.add_child(this._title);
@@ -657,6 +667,9 @@ class EarfulIndicator extends PanelMenu.Button {
             'changed::cover-volume-animation', () => this._queueRebuild(),
             'changed::list-layout', () => this._queueRebuild(),
             'changed::list-bars-order', () => this._queueRebuild(),
+            'changed::copy-on-hover-cards', () => this._queueRebuild(),
+            'changed::copy-on-hover-list', () => this._queueRebuild(),
+            'changed::scroll-titles', () => this._queueRebuild(),
             'changed::menu-background', () => this._syncBackground(),
             'changed::design', () => this._syncBackground(),
             'changed::design-color', () => this._syncBackground(),

@@ -51,7 +51,7 @@ EXTENSIONS="['$UUID']"
 if [ -n "$SHOTS" ]; then
     mkdir -p "$SHOTS"
     rm -f "$SHOTS/done" "$SHOTS/settings-come-back" "$SHOTS/popup-close" \
-          "$SHOTS/progress" "$SHOTS/progress-calls.log" "$SHOTS/card-layouts" "$SHOTS/list-layouts"
+          "$SHOTS/progress" "$SHOTS/progress-calls.log" "$SHOTS/card-layouts" "$SHOTS/list-layouts" "$SHOTS/copy-labels"
     cp -r "$ROOT/tools/shots-helper" "$WORK/data/gnome-shell/extensions/earful-shots@test"
     EXTENSIONS="['$UUID', 'earful-shots@test']"
 fi
@@ -105,7 +105,7 @@ FAKE_PLAYER_LENGTH=0 gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2
 P2=$!
 sleep "$STEP"
 if [ -n "$SHOTS" ]; then
-    for _ in $(seq 280); do [ -e "$SHOTS/done" ] && break; sleep 1; done
+    for _ in $(seq 310); do [ -e "$SHOTS/done" ] && break; sleep 1; done
     rm -f "$SHOTS/done"
 fi
 for kv in "toast-position bottom-left" "show-panel-label true" \
@@ -154,6 +154,12 @@ if [ -n "$SHOTS" ]; then
     check 'grep -qx "one-line-time-left true" "$L"' "list: one line, two jobs"
     check 'grep -qx "two-bars-time-left true" "$L" && grep -qx "two-bars-volume-left true" "$L"' "list: two bars, both orders"
     check '! grep -q "^error" "$L"' "list layout test ran without errors"
+    Y="$SHOTS/copy-labels"
+    check 'grep -qx "copy true" "$Y"' "clicking a card title copies it"
+    check 'grep -qx "slide true" "$Y" && grep -qx "back true" "$Y"' "a long title slides and comes back"
+    check 'grep -qx "listoff true" "$Y"' "list rows don't copy by default"
+    check 'grep -qx "compactplain true" "$Y"' "compact rows keep plain labels"
+    check '! grep -q "^error" "$Y"' "copy test ran without errors"
 fi
 gnome-extensions disable "$UUID"; sleep 2
 echo "after disable: $(gnome-extensions info "$UUID" | grep -o 'State: .*')"
@@ -169,7 +175,7 @@ env -u DISPLAY "$MARKER" EXT="$EXT" UUID="$UUID" EXTENSIONS="$EXTENSIONS" \
     SHOTS="$SHOTS" EARFUL_SHOTS="$SHOTS" ROOT="$ROOT" WORK="$WORK" STEP="$STEP" \
     PATH="$WORK/bin:$PATH" HOME="$WORK/home" WAYLAND_DISPLAY="$WL" GDK_BACKEND=wayland \
     XDG_DATA_HOME="$WORK/data" XDG_CONFIG_HOME="$WORK/config" XDG_CACHE_HOME="$WORK/cache" \
-    timeout 400 dbus-run-session -- bash "$WORK/scenario.sh" 2>"$WORK/bus.log"
+    timeout 430 dbus-run-session -- bash "$WORK/scenario.sh" 2>"$WORK/bus.log"
 
 [ -n "$SHOTS" ] && cp "$WORK/shell.log" "$WORK/bus.log" "$SHOTS/"
 [ -n "${KEEP_LOGS:-}" ] && mkdir -p "$KEEP_LOGS" && cp "$WORK/shell.log" "$WORK/bus.log" "$KEEP_LOGS/"

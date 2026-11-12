@@ -13,6 +13,8 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const OUT = GLib.getenv('EARFUL_SHOTS');
+// Long enough for a title to start sliding (it waits 1.2 s first).
+const HOLD_MS_TEST = 2500;
 const STYLES = ['cards', 'list', 'compact'];
 const DESIGNS = ['cover', 'glass', 'vinyl', 'wave', 'leds', 'road', 'cassette', 'system'];
 
@@ -169,6 +171,71 @@ export default class ShotsHelper extends Extension {
         await this._progress(earful);
         await this._cardLayouts(earful);
         await this._listLayouts(earful);
+        await this._copyLabels(earful);
+    }
+
+    /** Copy on hover and sliding titles: cards copy, the list doesn't by default. */
+    async _copyLabels(earful) {
+        const settings = earful._settings;
+        const result = [];
+        settings.set_boolean('toasts-enabled', false);
+        const firstItem = () => earful._section._getMenuItems().find(i => i.player);
+        try {
+            settings.set_string('menu-style', 'cards');
+            await wait(500);
+            earful.menu.open(false);
+            await wait(1200);
+            const item = firstItem();
+            const title = item?._title;
+            title?.emit('clicked', 1);
+            const copied = await new Promise(resolve => St.Clipboard.get_default()
+                .get_text(St.ClipboardType.CLIPBOARD, (clipboard, text) => resolve(text)));
+            result.push(`copy ${!!title && copied === title.text}`);
+
+            // A long title slides to show its end. A label of its own: the
+            // fake players change track every few seconds, which resets titles.
+            const {CopyLabel} = await import(
+                `file://${Main.extensionManager.lookup('earful@NGdev2.github.io').path}/lib/copyLabel.js`);
+            const long = new CopyLabel({styleClass: 'earful-title', copy: true, scroll: true});
+            long.set_width(200);
+            Main.layoutManager.uiGroup.add_child(long);
+            long.text = 'A very long title that cannot fit in the card, so it slides to show the rest';
+            await wait(300);
+            result.push(`slideinfo ${long._overflow()}`);
+            long._startScroll();
+            await wait(HOLD_MS_TEST);
+            result.push(`slide ${long.textLabel.translation_x < 0}`);
+            long._stopScroll();
+            result.push(`back ${long.textLabel.translation_x === 0}`);
+            long.destroy();
+            await shot('copy-cards');
+            earful.menu.close(false);
+            await wait(400);
+
+            settings.set_string('menu-style', 'list');
+            await wait(500);
+            earful.menu.open(false);
+            await wait(1200);
+            result.push(`listoff ${firstItem()?._title?._copy === false}`);
+            earful.menu.close(false);
+            await wait(400);
+
+            settings.set_string('menu-style', 'compact');
+            await wait(500);
+            earful.menu.open(false);
+            await wait(1200);
+            const compact = firstItem()?._title;
+            result.push(`compactplain ${compact instanceof St.Label && compact._copy === undefined}`);
+            earful.menu.close(false);
+            await wait(400);
+        } catch (e) {
+            logError(e, 'earful-shots');
+            result.push(`error ${e.message}`);
+        } finally {
+            settings.reset('menu-style');
+            settings.reset('toasts-enabled');
+            GLib.file_set_contents(`${OUT}/copy-labels`, result.join('\n'));
+        }
     }
 
     /** Each list layout: its bars show for players with a length and a volume. */

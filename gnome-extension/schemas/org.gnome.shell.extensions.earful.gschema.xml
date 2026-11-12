@@ -109,6 +109,19 @@
       <default>'time-left'</default>
       <summary>Which bar is on the left in the two-bars list layout</summary>
     </key>
+    <key name="copy-on-hover-cards" type="b">
+      <default>true</default>
+      <summary>Copy a card's title or artist with a click</summary>
+    </key>
+    <key name="copy-on-hover-list" type="b">
+      <default>false</default>
+      <summary>Copy a list row's title or artist with a click</summary>
+      <description>Off by default: in the list a click on the row raises the player.</description>
+    </key>
+    <key name="scroll-titles" type="b">
+      <default>true</default>
+      <summary>Long titles slide on hover to show their end</summary>
+    </key>
     <key name="cover-volume-animation" type="s">
       <choices>
         <choice value="liquid"/>

@@ -718,3 +718,26 @@
   font-size: 0.75em;
   font-feature-settings: "tnum";
 }
+
+/* Copy on hover (lib/copyLabel.js): a faint frame and a copy icon. At rest
+   1px of padding stands in for the frame, so nothing moves on hover. */
+.earful-copy {
+  /* Little room on the left, so the text stays in line with the source line
+     above (a negative margin would be neater, but St draws it badly). */
+  padding: 1px 4px 1px 2px;
+}
+
+.earful-copy-on:hover,
+.earful-copy-on:focus {
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  border-radius: 6px;
+  padding: 0 3px 0 1px;
+}
+
+.earful-copy-box {
+  spacing: 6px;
+}
+
+.earful-copy-icon {
+  icon-size: 12px;
+}
