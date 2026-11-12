@@ -69,7 +69,9 @@ gsettings set org.gnome.shell enabled-extensions "$EXTENSIONS"
 $G set $K design vinyl; $G set $K design-color amber
 SHELL_DEBUG=backtrace-warnings gnome-shell --headless --wayland --no-x11 \
     --wayland-display="$WAYLAND_DISPLAY" --virtual-monitor 1280x800 > "$WORK/shell.log" 2>&1 &
-sleep 6
+# Wait until Earful is running (slow containers need more than a few seconds).
+for _ in $(seq 40); do gnome-extensions info "$UUID" 2>/dev/null | grep -q 'State: ACTIVE' && break; sleep 1; done
+sleep 2
 
 # Browser tabs: Earful registers its helper with the (fake) browsers.
 check() { if eval "$1"; then echo "ok - $2"; else echo "FAIL - $2"; fi >> "$WORK/checks.log"; }
