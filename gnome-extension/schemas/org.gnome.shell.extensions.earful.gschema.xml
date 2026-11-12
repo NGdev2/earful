@@ -86,11 +86,28 @@
         <choice value="led"/>
         <choice value="knob"/>
         <choice value="pill"/>
-        <choice value="fader"/>
         <choice value="line"/>
       </choices>
       <default>'led'</default>
       <summary>Look of the standing volume on cards</summary>
+    </key>
+    <key name="list-layout" type="s">
+      <choices>
+        <choice value="cover-volume"/>
+        <choice value="one-line"/>
+        <choice value="two-bars"/>
+      </choices>
+      <default>'cover-volume'</default>
+      <summary>Where things sit on a list row</summary>
+      <description>cover-volume: scroll on the cover for the volume, progress along the bottom. one-line: one line under the text is the progress, and turns into the volume from the speaker. two-bars: progress and volume side by side.</description>
+    </key>
+    <key name="list-bars-order" type="s">
+      <choices>
+        <choice value="time-left"/>
+        <choice value="volume-left"/>
+      </choices>
+      <default>'time-left'</default>
+      <summary>Which bar is on the left in the two-bars list layout</summary>
     </key>
     <key name="cover-volume-animation" type="s">
       <choices>

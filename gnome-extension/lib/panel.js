@@ -19,6 +19,7 @@ import {ProgressBar} from './progress.js';
 import {VolumeSource, volumeIcon} from './volume.js';
 import {VerticalVolume} from './volumeStyles.js';
 import {CoverVolume} from './coverVolume.js';
+import {DuoBars, SwapLine} from './listBars.js';
 import {SceneLayer} from './scenes.js';
 import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
@@ -181,6 +182,7 @@ const PlayerItem = GObject.registerClass({
         this._style = style;
 
         const slim = style === 'cards' && settings.get_string('card-layout') === 'slim';
+        const listLayout = style === 'list' ? settings.get_string('list-layout') : null;
         this._art = new CoverArt(slim ? COVER_SIZES.list : COVER_SIZES[style]);
 
         const text = new St.BoxLayout({
@@ -250,18 +252,19 @@ const PlayerItem = GObject.registerClass({
         this._volume = null;
         this._vvolume = null;
         // Elapsed time, bar and length; compact rows have no sliders. Slim
-        // cards have it as a thin line along the bottom edge.
-        this._progress = style === 'compact' ? null : new ProgressBar({edge: slim});
+        // cards and cover-volume list rows have it as a thin line along the
+        // bottom edge; the other list layouts draw their own.
+        const edge = slim || listLayout === 'cover-volume';
+        this._progress = style === 'compact' || ['one-line', 'two-bars'].includes(listLayout)
+            ? null : new ProgressBar({edge});
+        this._listBars = null;
+        this._coverVolume = null;
 
         if (style === 'cards') {
             this._buildCard(settings.get_string('card-layout'), {text, controls});
+        } else if (style === 'list') {
+            this._buildListRow(listLayout, {text, controls});
         } else {
-            if (style === 'list') {
-                this._volume = new VolumeSlider(this._volumeSource);
-                text.add_child(this._volume);
-            }
-            if (this._progress)
-                text.add_child(this._progress);
             this.add_child(this._art);
             this.add_child(text);
             this.add_child(this._pin);
@@ -273,7 +276,7 @@ const PlayerItem = GObject.registerClass({
             'changed', () => this._sync(),
             'closed', () => this.destroy(),
             this);
-        if (this._volume || this._vvolume || this._coverVolume)
+        if (style !== 'compact')
             audio.connectObject('changed', () => this._syncVolume(), this);
         settings.connectObject(
             'changed::media-keys-target', () => this._syncPin(),
@@ -395,9 +398,53 @@ const PlayerItem = GObject.registerClass({
         this.add_child(stack);
     }
 
+    /**
+     * Lays out a list row. cover-volume: scroll on the cover for the volume,
+     * the progress as a line along the bottom. one-line: the line under the
+     * text is the progress and turns into the volume from the speaker.
+     * two-bars: progress and volume side by side under the text.
+     */
+    _buildListRow(layout, {text, controls}) {
+        let art = this._art;
+        if (layout === 'one-line') {
+            this._listBars = new SwapLine(this._volumeSource);
+        } else if (layout === 'two-bars') {
+            this._listBars = new DuoBars(this._volumeSource,
+                {order: this._settings.get_string('list-bars-order')});
+        } else {
+            this._coverVolume = new CoverVolume(this._art, this._volumeSource, {
+                animation: this._settings.get_string('cover-volume-animation'),
+                size: COVER_SIZES.list,
+            });
+            art = this._coverVolume;
+        }
+        if (this._listBars) {
+            this._listBars.bindPlayer(this.player);
+            text.add_child(this._listBars);
+        }
+
+        const row = new St.BoxLayout({style_class: 'earful-list-row', x_expand: true});
+        row.add_child(art);
+        row.add_child(text);
+        row.add_child(this._pin);
+        row.add_child(controls);
+        row.add_child(this._dismiss);
+        if (!this._progress) {
+            this.add_child(row);
+            return;
+        }
+        const column = new St.BoxLayout({...VERTICAL, x_expand: true});
+        column.add_child(row);
+        column.add_child(this._progress);
+        // The edge line grows and shows the times while the row is hovered.
+        this.connect('notify::active', () => this._progress.setExpanded(this.active));
+        this.add_child(column);
+    }
+
     /** Called once a second while the menu is open. */
     tick() {
         this._progress?.tick();
+        this._listBars?.tick();
     }
 
     _restyle() {
@@ -413,10 +460,12 @@ const PlayerItem = GObject.registerClass({
             this._progress.setSliderStyle(Look.sliderStyle(look, palette));
             this._vvolume?.setAccent(Look.accentColor(look, palette));
             this._vvolume?.setPlaying(this.player.isPlaying);
-            this._coverVolume?.setAccent(Look.accentColor(look, palette));
-            this._coverVolume?.setPlaying(this.player.isPlaying);
             this._scene.update(look, palette, this.player.isPlaying);
         }
+        // On the system theme there is no design accent; the cover's own works.
+        this._coverVolume?.setAccent(Look.accentColor(look, palette) ??
+            (palette ? `rgb(${palette.accent.join(', ')})` : null));
+        this._coverVolume?.setPlaying(this.player.isPlaying);
         this._source?.update(this.player, look.animate, Look.accentColor(look, palette));
     }
 
@@ -606,6 +655,8 @@ class EarfulIndicator extends PanelMenu.Button {
             'changed::card-layout', () => this._queueRebuild(),
             'changed::card-volume-style', () => this._queueRebuild(),
             'changed::cover-volume-animation', () => this._queueRebuild(),
+            'changed::list-layout', () => this._queueRebuild(),
+            'changed::list-bars-order', () => this._queueRebuild(),
             'changed::menu-background', () => this._syncBackground(),
             'changed::design', () => this._syncBackground(),
             'changed::design-color', () => this._syncBackground(),

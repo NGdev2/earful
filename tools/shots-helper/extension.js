@@ -168,6 +168,52 @@ export default class ShotsHelper extends Extension {
         await this._closePopup(settings);
         await this._progress(earful);
         await this._cardLayouts(earful);
+        await this._listLayouts(earful);
+    }
+
+    /** Each list layout: its bars show for players with a length and a volume. */
+    async _listLayouts(earful) {
+        const settings = earful._settings;
+        const result = [];
+        settings.set_boolean('toasts-enabled', false);
+        settings.set_string('menu-style', 'list');
+        try {
+            const cases = [['cover-volume', 'time-left'], ['one-line', 'time-left'],
+                ['two-bars', 'time-left'], ['two-bars', 'volume-left']];
+            for (const [layout, order] of cases) {
+                settings.set_string('list-layout', layout);
+                settings.set_string('list-bars-order', order);
+                await wait(500);
+                earful.menu.open(false);
+                await wait(1200);
+                const items = earful._section._getMenuItems().filter(i => i.player);
+                const withLength = items.find(i => i.player.length > 0);
+                let ok = items.length > 0 && !!withLength;
+                if (layout === 'cover-volume') {
+                    ok &&= items.every(i => i._coverVolume) && withLength._progress?.visible === true;
+                    for (const item of items) {
+                        item._coverVolume._change(0.62);
+                        item._coverVolume._linger();
+                    }
+                    await wait(450);
+                } else {
+                    ok &&= items.every(i => i._listBars?.visible === true && i._progress === null);
+                }
+                result.push(`${layout}-${order} ${ok}`);
+                await shot(`list-${layout}${layout === 'two-bars' ? `-${order}` : ''}`);
+                earful.menu.close(false);
+                await wait(400);
+            }
+        } catch (e) {
+            logError(e, 'earful-shots');
+            result.push(`error ${e.message}`);
+        } finally {
+            settings.reset('list-layout');
+            settings.reset('list-bars-order');
+            settings.reset('menu-style');
+            settings.reset('toasts-enabled');
+            GLib.file_set_contents(`${OUT}/list-layouts`, result.join('\n'));
+        }
     }
 
     /** Each card layout with each standing volume style. */
@@ -178,7 +224,7 @@ export default class ShotsHelper extends Extension {
         settings.set_string('menu-style', 'cards');
         try {
             for (const layout of ['standing-volume', 'side-volume']) {
-                for (const style of ['led', 'knob', 'pill', 'fader', 'line']) {
+                for (const style of ['led', 'knob', 'pill', 'line']) {
                     settings.set_string('card-layout', layout);
                     settings.set_string('card-volume-style', style);
                     await wait(500);

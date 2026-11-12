@@ -51,7 +51,7 @@ EXTENSIONS="['$UUID']"
 if [ -n "$SHOTS" ]; then
     mkdir -p "$SHOTS"
     rm -f "$SHOTS/done" "$SHOTS/settings-come-back" "$SHOTS/popup-close" \
-          "$SHOTS/progress" "$SHOTS/progress-calls.log" "$SHOTS/card-layouts"
+          "$SHOTS/progress" "$SHOTS/progress-calls.log" "$SHOTS/card-layouts" "$SHOTS/list-layouts"
     cp -r "$ROOT/tools/shots-helper" "$WORK/data/gnome-shell/extensions/earful-shots@test"
     EXTENSIONS="['$UUID', 'earful-shots@test']"
 fi
@@ -99,7 +99,7 @@ FAKE_PLAYER_LENGTH=0 gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2
 P2=$!
 sleep "$STEP"
 if [ -n "$SHOTS" ]; then
-    for _ in $(seq 250); do [ -e "$SHOTS/done" ] && break; sleep 1; done
+    for _ in $(seq 280); do [ -e "$SHOTS/done" ] && break; sleep 1; done
     rm -f "$SHOTS/done"
 fi
 for kv in "toast-position bottom-left" "show-panel-label true" \
@@ -139,10 +139,15 @@ if [ -n "$SHOTS" ]; then
     check 'grep -qx "reread true" "$P"' "a silent jump is found within 5 seconds"
     check '! grep -q "^error" "$P"' "progress test ran without errors"
     C="$SHOTS/card-layouts"
-    check '[ "$(grep -cE "^(standing|side)-volume-[a-z]+ true$" "$C")" = 10 ]' "both card layouts show all 5 volume styles"
+    check '[ "$(grep -cE "^(standing|side)-volume-[a-z]+ true$" "$C")" = 8 ]' "both card layouts show all 4 volume styles"
     check 'grep -qx "slim true" "$C"' "slim cards: edge progress grows on hover, slide-out volume"
     check '[ "$(grep -cE "^cover-[a-z]+ true$" "$C")" = 10 ]' "volume on the cover shows all 10 animations"
     check '! grep -q "^error" "$C"' "card layout test ran without errors"
+    L="$SHOTS/list-layouts"
+    check 'grep -qx "cover-volume-time-left true" "$L"' "list: volume on the cover with the edge progress"
+    check 'grep -qx "one-line-time-left true" "$L"' "list: one line, two jobs"
+    check 'grep -qx "two-bars-time-left true" "$L" && grep -qx "two-bars-volume-left true" "$L"' "list: two bars, both orders"
+    check '! grep -q "^error" "$L"' "list layout test ran without errors"
 fi
 gnome-extensions disable "$UUID"; sleep 2
 echo "after disable: $(gnome-extensions info "$UUID" | grep -o 'State: .*')"
@@ -158,7 +163,7 @@ env -u DISPLAY "$MARKER" EXT="$EXT" UUID="$UUID" EXTENSIONS="$EXTENSIONS" \
     SHOTS="$SHOTS" EARFUL_SHOTS="$SHOTS" ROOT="$ROOT" WORK="$WORK" STEP="$STEP" \
     PATH="$WORK/bin:$PATH" HOME="$WORK/home" WAYLAND_DISPLAY="$WL" GDK_BACKEND=wayland \
     XDG_DATA_HOME="$WORK/data" XDG_CONFIG_HOME="$WORK/config" XDG_CACHE_HOME="$WORK/cache" \
-    timeout 370 dbus-run-session -- bash "$WORK/scenario.sh" 2>"$WORK/bus.log"
+    timeout 400 dbus-run-session -- bash "$WORK/scenario.sh" 2>"$WORK/bus.log"
 
 [ -n "$SHOTS" ] && cp "$WORK/shell.log" "$WORK/bus.log" "$SHOTS/"
 [ -n "${KEEP_LOGS:-}" ] && mkdir -p "$KEEP_LOGS" && cp "$WORK/shell.log" "$WORK/bus.log" "$KEEP_LOGS/"

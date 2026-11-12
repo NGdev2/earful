@@ -39,6 +39,17 @@ const CARD_LAYOUTS = [
     ['cover-volume', () => _('Volume on the cover')],
 ];
 
+const LIST_LAYOUTS = [
+    ['cover-volume', () => _('Volume on the cover')],
+    ['one-line', () => _('One line, two jobs')],
+    ['two-bars', () => _('Two bars')],
+];
+
+const LIST_BARS_ORDERS = [
+    ['time-left', () => _('Time left, volume right')],
+    ['volume-left', () => _('Volume left, time right')],
+];
+
 const COVER_ANIMATIONS = [
     ['liquid', () => _('Liquid')],
     ['cloud', () => _('Cloud')],
@@ -56,7 +67,6 @@ const VOLUME_STYLES = [
     ['led', () => _('LED steps')],
     ['knob', () => _('Knob')],
     ['pill', () => _('Pill')],
-    ['fader', () => _('Studio fader')],
     ['line', () => _('Line')],
 ];
 
@@ -241,20 +251,31 @@ export default class EarfulPreferences extends ExtensionPreferences {
         const coverAnimation = choiceRow(window, settings, 'cover-volume-animation',
             _('Cover animation'), COVER_ANIMATIONS,
             _('Scroll on the cover to change the volume.'));
+        const listLayout = choiceRow(window, settings, 'list-layout', _('List layout'),
+            LIST_LAYOUTS, _('The progress bar and where the volume sits.'));
+        const barsOrder = choiceRow(window, settings, 'list-bars-order',
+            _('Bars'), LIST_BARS_ORDERS);
         look.add(cardLayout);
         look.add(volumeStyle);
+        look.add(listLayout);
+        look.add(barsOrder);
         look.add(coverAnimation);
         // Each option only matters for the layouts that use it.
         const syncCards = () => {
-            const cards = settings.get_string('menu-style') === 'cards';
+            const style = settings.get_string('menu-style');
+            const cards = style === 'cards', list = style === 'list';
             const layout = settings.get_string('card-layout');
+            const rowLayout = settings.get_string('list-layout');
             cardLayout.sensitive = cards;
             volumeStyle.sensitive = cards &&
                 ['standing-volume', 'side-volume'].includes(layout);
-            coverAnimation.sensitive = cards && layout === 'cover-volume';
+            listLayout.sensitive = list;
+            barsOrder.sensitive = list && rowLayout === 'two-bars';
+            coverAnimation.sensitive = (cards && layout === 'cover-volume') ||
+                (list && rowLayout === 'cover-volume');
         };
         syncCards();
-        const cardIds = ['menu-style', 'card-layout'].map(key =>
+        const cardIds = ['menu-style', 'card-layout', 'list-layout'].map(key =>
             settings.connect(`changed::${key}`, syncCards));
         window.connect('close-request', () => cardIds.forEach(id => settings.disconnect(id)));
         look.add(choiceRow(window, settings, 'menu-background', _('Menu background'),

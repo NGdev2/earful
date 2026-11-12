@@ -643,3 +643,78 @@
   font-weight: 800;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
+
+/* List row: cover, text, controls; the edge progress may sit under it */
+.earful-list-row {
+  spacing: 12px;
+}
+
+/* One line, two jobs (lib/listBars.js SwapLine) */
+.earful-swap {
+  spacing: 6px;
+  padding-top: 3px;
+}
+
+.earful-swap-mute,
+.earful-duo-mute {
+  border-radius: 99px;
+  padding: 2px;
+}
+
+.earful-swap-icon,
+.earful-duo-icon {
+  icon-size: 14px;
+}
+
+.earful-swap .slider,
+.earful-duo .slider {
+  height: 16px;
+  -barlevel-height: 3px;
+  -slider-handle-radius: 0;
+}
+
+.earful-swap:expanded .slider,
+.earful-duo-part:expanded .slider {
+  -slider-handle-radius: 6px;
+}
+
+/* Two bars on one line (lib/listBars.js DuoBars) */
+.earful-duo {
+  spacing: 10px;
+  padding-top: 3px;
+}
+
+.earful-duo-part {
+  spacing: 0;
+}
+
+.earful-duo-clock {
+  padding: 2px;
+}
+
+.earful-duo .slider {
+  min-width: 14px;
+}
+
+/* Gaps come from the bar's margin and the value's padding, so a hidden
+   (width 0) value adds no space. */
+.earful-duo-start .slider {
+  margin-left: 6px;
+}
+
+.earful-duo-end .slider {
+  margin-right: 6px;
+}
+
+.earful-duo-start .earful-duo-value {
+  padding-left: 6px;
+}
+
+.earful-duo-end .earful-duo-value {
+  padding-right: 6px;
+}
+
+.earful-duo-value {
+  font-size: 0.75em;
+  font-feature-settings: "tnum";
+}

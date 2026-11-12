@@ -13,6 +13,8 @@ import {VERTICAL, scaleFactor} from './widgets.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+// 'fader' is kept but not offered in Settings: its meter only means something
+// once Earful can measure the real sound level (see the plan).
 export const VOLUME_STYLES = ['led', 'knob', 'pill', 'fader', 'line'];
 
 const SEGMENTS = 10;
