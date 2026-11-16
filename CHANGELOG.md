@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased (0.3.0)
+
+New
+- Track progress: elapsed time, a bar you can drag to seek, and the length. Live streams show no bar. When a site ignores a seek (YouTube during an ad), the bar locks until the next track instead of jumping back and forth.
+- Card layouts: volume on the right (new default), volume beside the cover, slim, and volume on the cover.
+- A standing volume in four styles: LED steps (default), knob, pill and line.
+- Volume on the cover: scroll on the cover to change the volume, with one of ten animations. The default, Liquid, fills the cover like a glass of water.
+- List layouts: volume on the cover (new default), one line for progress and volume, and two bars side by side.
+- Copy a title or artist with a click; long titles slide on hover.
+- Popup styles: controls on hover (new default), classic, Next with a countdown line, mini pill, island and big cover.
+- A close button on popups (thanks @KevenGoncalves, #4).
+- Settings in three pages (Menu, Popups, Behaviour). Popups have their own design, and options are greyed out where they don't apply.
+- Settings show which browsers the add-on has connected from, and "Get the add-on" opens the store in that browser.
+- Browser tabs work in Brave Origin (thanks u/Serenase).
+
+Fixed
+- Settings come to the front when they are already open (#6).
+- Long site names end in "…" instead of widening the menu.
+
 ## 0.2.3 (2026-11-05)
 
 New
