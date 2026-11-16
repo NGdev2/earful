@@ -55,6 +55,7 @@ class ProgressBar extends St.BoxLayout {
         this._player = null;
         this._dragging = false;
         this._updating = false;
+        this._wantExpanded = !edge;
 
         this.elapsedLabel = new St.Label({
             style_class: 'earful-progress-time',
@@ -69,10 +70,14 @@ class ProgressBar extends St.BoxLayout {
         this.slider.y_align = Clutter.ActorAlign.CENTER;
         this.slider.connectObject(
             'notify::value', () => this._onSliderChanged(),
-            'drag-begin', () => (this._dragging = true),
+            'drag-begin', () => {
+                this._dragging = true;
+                this._syncExpanded();
+            },
             'drag-end', () => {
                 this._dragging = false;
                 this.seekTo(this.slider.value);
+                this._syncExpanded();
             },
             this);
         this.add_child(this.slider);
@@ -82,7 +87,7 @@ class ProgressBar extends St.BoxLayout {
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.add_child(this.lengthLabel);
-        this.setExpanded(!edge);
+        this._syncExpanded();
 
         this.connect('destroy', () => {
             if (this._keySeekId)
@@ -105,10 +110,20 @@ class ProgressBar extends St.BoxLayout {
         this.tick();
     }
 
-    /** Edge bars show the times and a handle only when expanded. */
+    /**
+     * Edge bars show the times and a handle only when expanded. A drag
+     * keeps them expanded: the card loses its hover while the bar has the
+     * pointer.
+     */
     setExpanded(expanded) {
+        this._wantExpanded = expanded;
+        this._syncExpanded();
+    }
+
+    _syncExpanded() {
         if (!this._edge)
             return;
+        const expanded = this._wantExpanded || this._dragging;
         this.elapsedLabel.visible = expanded;
         this.lengthLabel.visible = expanded;
         // Thin, it lies on the bottom of its row, so growing doesn't move the card.

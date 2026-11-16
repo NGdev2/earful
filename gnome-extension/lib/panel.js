@@ -53,8 +53,10 @@ class VolumeSlider extends St.BoxLayout {
      * @param {object} [options]
      * @param {boolean} [options.slide] only the speaker shows; the bar slides
      *   out from it while hovered
+     * @param {Function} [options.onSlide] called with true before the bar
+     *   slides out, and with false once it is back in
      */
-    _init(source, {slide = false} = {}) {
+    _init(source, {slide = false, onSlide = () => {}} = {}) {
         super._init({
             style_class: slide ? 'earful-volume earful-volume-slide' : 'earful-volume',
             x_expand: !slide,
@@ -96,17 +98,25 @@ class VolumeSlider extends St.BoxLayout {
                 this.sync();
             },
             this);
-        this.add_child(this._slider);
         if (slide) {
+            // The bar slides out to the left, so the speaker stays under
+            // the pointer.
+            this.insert_child_at_index(this._slider, 0);
             this._slider.width = 0;
             this._slider.opacity = 0;
             const sync = () => {
                 const open = this.hover || this._dragging;
+                if (open)
+                    onSlide(true);
                 this._slider.ease({
                     width: open ? SLIDE_WIDTH * scaleFactor() : 0,
                     opacity: open ? 255 : 0,
                     duration: 180,
                     mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    onComplete: () => {
+                        if (!open && !this.hover && !this._dragging)
+                            onSlide(false);
+                    },
                 });
             };
             this.connect('notify::hover', sync);
@@ -326,7 +336,12 @@ const PlayerItem = GObject.registerClass({
         } else if (layout === 'slim') {
             // One row; previous is left out to give the title room.
             this._prev.visible = false;
-            this._volume = new VolumeSlider(this._volumeSource, {slide: true});
+            // While the bar is out the row keeps its width: the bar takes
+            // room from the title instead of widening the menu.
+            this._volume = new VolumeSlider(this._volumeSource, {
+                slide: true,
+                onSlide: open => (top.width = open ? top.width : -1),
+            });
             this._volume.y_align = Clutter.ActorAlign.CENTER;
             top.add_child(this._art);
             top.add_child(text);
