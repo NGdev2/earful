@@ -13,6 +13,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {CoverArt} from './art.js';
+import {ExamplePlayer} from './example.js';
 import * as Look from './look.js';
 import {SceneLayer} from './scenes.js';
 import {PlayerControls, SourceLine, VERTICAL, scaleFactor} from './widgets.js';
@@ -439,9 +440,18 @@ const Toast = GObject.registerClass({
 });
 
 export class ToastManager {
-    constructor(settings, manager) {
+    /**
+     * @param {Gio.Settings} settings
+     * @param {object} manager the PlayerManager
+     * @param {Gio.File} dir the extension's folder, for the example popup
+     */
+    constructor(settings, manager, dir) {
         this._settings = settings;
         this._toasts = [];
+        // Popups cleared at once, waiting to be destroyed.
+        this._leaving = new Set();
+        this._leavingId = 0;
+        this._example = new ExamplePlayer(dir);
         this._notificationSettings = new Gio.Settings({
             schema_id: 'org.gnome.desktop.notifications',
         });
@@ -452,8 +462,15 @@ export class ToastManager {
 
         settings.connectObject(
             'changed::toast-position', () => this._relayout(false),
-            // Popups are built for one style; the next track brings the new one.
-            'changed::popup-style', () => this._dismissAll(),
+            // Popups are built for one style; the next track brings the new
+            // one, and an example on screen comes back in it right away.
+            'changed::popup-style', () => {
+                const example = this._shown(this._example);
+                this._dismissAll();
+                if (example)
+                    this._showExample();
+            },
+            'changed::show-example-popup', () => this._showExample(),
             'changed::focus-mode', () => {
                 if (settings.get_boolean('focus-mode'))
                     this._dismissAll();
@@ -512,7 +529,7 @@ export class ToastManager {
 
         // The same player skipping again updates its popup instead of
         // stacking another one; it gets more time only if it may show.
-        const existing = this._toasts.find(t => t.player === player && !t.dismissing);
+        const existing = this._shown(player);
         if (existing) {
             existing.showTrack();
             if (show && !existing.hover)
@@ -520,9 +537,33 @@ export class ToastManager {
             this._relayout(true);
             return;
         }
-        if (!show)
-            return;
+        if (show)
+            this._add(player);
+    }
 
+    /** The player's popup on screen, if any. */
+    _shown(player) {
+        return this._toasts.find(t => t.player === player && !t.dismissing);
+    }
+
+    /**
+     * Settings asked to see an example: it shows whatever the quiet rules
+     * say, and asking again while it's shown skips to the next example.
+     */
+    _showExample() {
+        const shown = this._shown(this._example);
+        if (!shown) {
+            this._add(this._example);
+            return;
+        }
+        // The popup follows its player to the next track.
+        this._example.next();
+        if (!shown.hover)
+            this._startTimer(shown);
+        this._relayout(true);
+    }
+
+    _add(player) {
         this._monitor = this._targetMonitor();
 
         const toast = new Toast(player, this._settings);
@@ -598,11 +639,33 @@ export class ToastManager {
         this._relayout(true);
     }
 
+    /**
+     * Clears every popup at once. They are hidden now and destroyed a
+     * moment later: one that has just appeared still waits for its first
+     * layout, which the shell would otherwise run on a removed actor.
+     */
     _dismissAll() {
-        const toasts = this._toasts;
+        for (const toast of this._toasts) {
+            toast.dismissing = true;
+            toast.track_hover = false;
+            toast.stopTimer();
+            toast.hide();
+            this._leaving.add(toast);
+        }
         this._toasts = [];
-        for (const toast of toasts)
+        if (this._leaving.size > 0 && !this._leavingId) {
+            this._leavingId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SLIDE_IN_MS, () => {
+                this._leavingId = 0;
+                this._destroyLeaving();
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+    }
+
+    _destroyLeaving() {
+        for (const toast of this._leaving)
             toast.destroy();
+        this._leaving.clear();
     }
 
     _relayout(animate) {
@@ -654,6 +717,10 @@ export class ToastManager {
 
     destroy() {
         this._dismissAll();
+        if (this._leavingId)
+            GLib.source_remove(this._leavingId);
+        this._leavingId = 0;
+        this._destroyLeaving();
         this._settings.disconnectObject(this);
         this._manager.disconnectObject(this);
         Main.layoutManager.disconnectObject(this);

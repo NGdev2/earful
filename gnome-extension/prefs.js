@@ -371,6 +371,15 @@ export default class EarfulPreferences extends ExtensionPreferences {
             description: _('A small card that fades out when a new track starts.'),
         });
         popupPage.add(popups);
+        // Shows one on screen with these settings, right away.
+        const example = new Gtk.Button({
+            label: _('Show example'),
+            valign: Gtk.Align.CENTER,
+            tooltip_text: _('Show an example popup with these settings'),
+        });
+        example.connect('clicked', () => settings.set_int('show-example-popup',
+            (settings.get_int('show-example-popup') + 1) % 1000));
+        popups.header_suffix = example;
         popups.add(switchRow(settings, 'toasts-enabled', _('Show popups')));
         const popupRows = [
             choiceRow(window, settings, 'toast-position', _('Position'), POSITIONS),
@@ -410,6 +419,7 @@ export default class EarfulPreferences extends ExtensionPreferences {
             const on = settings.get_boolean('toasts-enabled');
             popupRows.forEach(row => (row.sensitive = on));
             [popupLook, skip, apps].forEach(group => (group.sensitive = on));
+            example.sensitive = on;
             const style = settings.get_string('popup-style');
             // The island is always black; the system theme brings its own
             // colors and background.

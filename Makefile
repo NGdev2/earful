@@ -17,7 +17,7 @@ schemas:
 pack: schemas
 	mkdir -p $(DIST)
 	gnome-extensions pack $(SRC) --force --out-dir=$(DIST) \
-		--extra-source=lib --extra-source=icons --extra-source=bridge
+		--extra-source=lib --extra-source=icons --extra-source=media --extra-source=bridge
 
 ego: pack
 

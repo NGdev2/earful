@@ -34,7 +34,7 @@ export default class EarfulExtension extends Extension {
         migrateSettings(this._settings);
         this._manager = new PlayerManager();
         this._audio = new AudioManager(this._manager);
-        this._toasts = new ToastManager(this._settings, this._manager);
+        this._toasts = new ToastManager(this._settings, this._manager, this.dir);
         this._pauseOthers = new PauseOthers(this._settings, this._manager);
         this._mediaKeys = new MediaKeys(this._settings, this._manager);
 

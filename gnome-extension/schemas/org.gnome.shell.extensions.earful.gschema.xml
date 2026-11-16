@@ -198,6 +198,11 @@
       <summary>Shape of the now-playing popups</summary>
       <description>hover: buttons appear when pointed at. current: no buttons. countdown: a Next button and a line showing how long the popup stays. mini: a one-line pill. island: a black pill that grows on hover. big: a large cover with buttons under it.</description>
     </key>
+    <key name="show-example-popup" type="i">
+      <default>0</default>
+      <summary>Counts the requests from Settings to show an example popup</summary>
+      <description>Each change shows an example popup with the current popup settings.</description>
+    </key>
     <key name="popup-design" type="s">
       <choices>
         <choice value="cover"/>

@@ -117,7 +117,7 @@ install() {
     fi
 
     gnome-extensions pack "$src/gnome-extension" --force --out-dir="$tmp" \
-        --extra-source=lib --extra-source=icons --extra-source=bridge
+        --extra-source=lib --extra-source=icons --extra-source=media --extra-source=bridge
     gnome-extensions install --force "$tmp/$UUID.shell-extension.zip"
 
     # Switch it on for the next login. (gnome-extensions enable only works

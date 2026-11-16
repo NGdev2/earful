@@ -757,6 +757,35 @@ export default class ShotsHelper extends Extension {
             await wait(300);
             restyled &&= !popups().some(t => t.styleName === last);
             result.push(`restyle ${restyled}`);
+
+            // The example from Settings shows whatever the quiet rules say
+            // (focus mode here); asking again swaps the track, and a new
+            // style brings it back in that style.
+            settings.set_boolean('focus-mode', true);
+            await wait(300);
+            const isExample = t => t.player?.sourceName === 'Example';
+            const ask = () => settings.set_int('show-example-popup',
+                (settings.get_int('show-example-popup') + 1) % 1000);
+            ask();
+            await wait(1500);
+            const example = popups().find(isExample);
+            result.push(`example-shows ${!!example}`);
+            result.push(`example-cover ${!!find(example, 'earful-cover')?.has_style_pseudo_class('cover')}`);
+            await shot('popups-example');
+            const firstTitle = find(example, 'earful-toast-title')?.text;
+            ask();
+            await wait(800);
+            result.push(`example-next ${!!example && popups().includes(example) &&
+                find(example, 'earful-toast-title')?.text !== firstTitle}`);
+            settings.set_string('popup-style', 'mini');
+            await wait(800);
+            result.push(`example-restyle ${popups().some(t => isExample(t) && t.styleName === 'mini')}`);
+            settings.reset('popup-style');
+            // Focus mode turning on clears the example away.
+            settings.set_boolean('focus-mode', false);
+            settings.set_boolean('focus-mode', true);
+            await wait(300);
+            settings.reset('focus-mode');
             result.push(`widths ${widths.join(' ')}`);
         } catch (e) {
             logError(e, 'earful-shots');
@@ -766,6 +795,7 @@ export default class ShotsHelper extends Extension {
             settings.reset('popup-style');
             settings.reset('toast-duration');
             settings.reset('toast-muted-apps');
+            settings.reset('focus-mode');
             call('Quit', 'org.mpris.MediaPlayer2');
             GLib.file_set_contents(`${OUT}/popup-styles`, result.join('\n'));
         }
