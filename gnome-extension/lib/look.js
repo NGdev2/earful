@@ -76,6 +76,18 @@ export function surfaceStyle(look, palette, hover = false) {
         'border: 1px solid rgba(255, 255, 255, 0.09); transition-duration: 450ms;';
 }
 
+/**
+ * Color at the right end of a painted surface, clear and as painted, so
+ * something laid over that end can fade into it. Null for 'system'.
+ */
+export function edgeColors(look, palette, hover = false) {
+    if (look.design === 'system')
+        return null;
+    const base = look.design === 'glass' ? [22, 22, 28] : paletteFor(look, palette).end;
+    const color = lighten(base, hover ? 0.1 : 0);
+    return {clear: rgba(color, 0), solid: rgba(color, look.opacity)};
+}
+
 /** The highlight color: the cover's accent, or white-ish without one. */
 export function accentColor(look, palette) {
     if (look.design === 'system')

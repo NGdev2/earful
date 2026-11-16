@@ -30,6 +30,70 @@ async function shot(name) {
     stream.close(null);
 }
 
+/** Popups on screen that aren't fading out. */
+const popups = () => Main.layoutManager.uiGroup.get_children()
+    .filter(a => a.has_style_class_name?.('earful-toast') && !a.dismissing);
+
+/** Every actor in root's tree, root included, with the style class. */
+function findAll(root, styleClass) {
+    if (!root)
+        return [];
+    const found = root.has_style_class_name?.(styleClass) ? [root] : [];
+    for (const child of root.get_children())
+        found.push(...findAll(child, styleClass));
+    return found;
+}
+
+const find = (root, styleClass) => findAll(root, styleClass)[0] ?? null;
+
+/** Whether an actor can be seen: mapped, and nothing up its tree is transparent. */
+function seen(actor) {
+    if (!actor?.mapped)
+        return false;
+    for (let a = actor; a; a = a.get_parent()) {
+        if (a.opacity === 0)
+            return false;
+    }
+    return true;
+}
+
+const now = () => GLib.get_monotonic_time();
+
+/** A virtual pointer, for real hovers and clicks. */
+async function virtualPointer() {
+    // GNOME 51 dropped Clutter.get_default_backend().
+    const backend = Clutter.get_default_backend?.() ?? global.stage.context.get_backend();
+    const pointer = backend.get_default_seat()
+        .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    // A new virtual device takes a moment to be ready on GNOME 49+.
+    await wait(500);
+    return pointer;
+}
+
+/** Moves the pointer onto the middle of an actor. */
+async function pointAt(pointer, actor) {
+    const [x, y] = actor.get_transformed_position();
+    const [w, h] = actor.get_transformed_size();
+    pointer.notify_absolute_motion(now(), x + w / 2 - 2, y + h / 2 - 2);
+    await wait(200);
+    pointer.notify_absolute_motion(now(), x + w / 2, y + h / 2);
+}
+
+function click(pointer) {
+    pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
+    pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+}
+
+/** How many times a fake player was asked for the next track, from its log. */
+function nextCalls(log) {
+    try {
+        const [, contents] = GLib.file_get_contents(log);
+        return new TextDecoder().decode(contents).split('\n').filter(l => l === 'next').length;
+    } catch {
+        return 0;
+    }
+}
+
 export default class ShotsHelper extends Extension {
     enable() {
         if (!OUT)
@@ -168,6 +232,7 @@ export default class ShotsHelper extends Extension {
         settings.reset('toast-shadow');
         settings.reset('popup-design');
         await this._closePopup(settings);
+        await this._popupStyles(earful);
         await this._progress(earful);
         await this._cardLayouts(earful);
         await this._listLayouts(earful);
@@ -540,36 +605,23 @@ export default class ShotsHelper extends Extension {
     /** The ✕ on a popup closes it without raising the player. */
     async _closePopup(settings) {
         settings.set_int('toast-duration', 30);
-        const popups = () => Main.layoutManager.uiGroup.get_children()
-            .filter(a => a.has_style_class_name?.('earful-toast') && !a.dismissing);
         for (let i = 0; i < 20 && popups().length === 0; i++)
             await wait(500);
         const result = [];
         const popup = popups().at(-1);
-        const close = popup?.get_child()?.get_children()
-            .find(a => a.has_style_class_name?.('earful-toast-close'));
+        // Some styles put it in the popup's row, so look through the whole popup.
+        const close = find(popup, 'earful-toast-close');
         result.push(`close shown ${!!close?.mapped}`);
         if (close) {
             let raised = false;
             popup.connect('clicked', () => (raised = true));
             // A real pointer click, so the popup underneath gets its say too.
-            // GNOME 51 dropped Clutter.get_default_backend().
-            const backend = Clutter.get_default_backend?.() ?? global.stage.context.get_backend();
-            const pointer = backend.get_default_seat()
-                .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
-            const [x, y] = close.get_transformed_position();
-            const [w, h] = close.get_transformed_size();
-            const now = () => GLib.get_monotonic_time();
-            // A new virtual device takes a moment to be ready on GNOME 49+.
-            await wait(500);
-            pointer.notify_absolute_motion(now(), x + w / 2 - 2, y + h / 2 - 2);
-            await wait(200);
-            pointer.notify_absolute_motion(now(), x + w / 2, y + h / 2);
+            const pointer = await virtualPointer();
+            await pointAt(pointer, close);
             await wait(800);
             result.push(`hover ${close.hover}`);
             await shot('popups-close-hover');
-            pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
-            pointer.notify_button(now(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
+            click(pointer);
             await wait(100);
             result.push(`closing ${popup.dismissing === true}`);
             result.push(`raised ${raised}`);
@@ -579,6 +631,144 @@ export default class ShotsHelper extends Extension {
         }
         settings.reset('toast-duration');
         GLib.file_set_contents(`${OUT}/popup-close`, result.join('\n'));
+    }
+
+    /** Each popup style: its size, its buttons, and what the pointer does to it. */
+    async _popupStyles(earful) {
+        const settings = earful._settings;
+        const result = [];
+        const widths = [];
+        // A player of its own that skips only when told to: Spotify's 2 s
+        // tracks would restart the countdown. The others stay quiet (a burst
+        // of popups is a separate case).
+        const name = 'Styles';
+        const log = `${OUT}/popup-styles-calls.log`;
+        GLib.unlink(log);
+        settings.set_strv('toast-muted-apps', ['spotify', 'podcasts']);
+        settings.set_int('toast-duration', 30);
+        const env = GLib.environ_setenv(GLib.get_environ(), 'FAKE_PLAYER_LOG', log, true);
+        GLib.spawn_async(null, ['gjs', '-m', `${GLib.getenv('ROOT')}/tools/fake-player.js`, name, '0',
+            `${GLib.getenv('WORK')}/covers`], env, GLib.SpawnFlags.SEARCH_PATH, null);
+        const call = (method, iface = 'org.mpris.MediaPlayer2.Player') =>
+            Gio.DBus.session.call(`org.mpris.MediaPlayer2.${name}`, '/org/mpris/MediaPlayer2',
+                iface, method, null, null, Gio.DBusCallFlags.NONE, -1, null, null);
+        const popupOf = async style => {
+            const match = () => popups().find(t => t.styleName === style && t.player?.identity === name);
+            for (let i = 0; i < 25 && !match(); i++)
+                await wait(200);
+            return match() ?? null;
+        };
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const near = (actor, logical) => !!actor && Math.abs(actor.width - logical * scale) <= 1;
+        const sizes = {current: 380, hover: 380, countdown: 380, mini: 330, island: 270, big: 250};
+        const covers = {current: 72, hover: 72, countdown: 72, mini: 36, island: 30, big: 228};
+        let pointer = null;
+        const away = async () => {
+            pointer.notify_absolute_motion(now(), 10, 400);
+            await wait(300);
+        };
+        try {
+            pointer = await virtualPointer();
+            for (let i = 0; i < 20 && !this._hasPlayer(earful, name); i++)
+                await wait(500);
+            await wait(500);
+            let restyled = true;
+            for (const style of Object.keys(sizes)) {
+                // A new style replaces the popups shown; the next track brings one.
+                const previous = settings.get_string('popup-style');
+                settings.set_string('popup-style', style);
+                await wait(300);
+                restyled &&= !popups().some(t => t.styleName === previous);
+                call('Next');
+                const toast = await popupOf(style);
+                if (!toast) {
+                    result.push(`error no ${style} popup`);
+                    continue;
+                }
+                await wait(700);
+                await shot(`popups-style-${style}`);
+                widths.push(`${style}:${Math.round(toast.width)}`);
+                // Whole on screen, and taller than its cover.
+                const cover = find(toast, 'earful-cover');
+                result.push(`onscreen-${style} ${toast.y >= 0 && toast.y + toast.height <= global.stage.height &&
+                    toast.height > (cover?.height ?? 0)}`);
+                result.push(`width-${style} ${near(toast, sizes[style])}`);
+                result.push(`cover-${style} ${near(find(toast, 'earful-cover'), covers[style])}`);
+
+                const controls = find(toast, 'earful-toast-controls');
+                const buttons = findAll(controls, 'earful-control');
+                const next = buttons.find(b => b.accessible_name === 'Next');
+                const nextOnly = buttons.length === 1 && !!next;
+                const controlsOk = {
+                    current: !controls,
+                    hover: !!controls && controls.opacity === 0 && !controls.reactive,
+                    countdown: nextOnly && seen(controls),
+                    mini: nextOnly && seen(controls),
+                    island: !!controls && !controls.mapped,
+                    big: !!next && seen(controls),
+                }[style];
+                result.push(`controls-${style} ${controlsOk}`);
+
+                if (style === 'hover') {
+                    await pointAt(pointer, toast);
+                    await wait(600);
+                    result.push(`hover-shows ${controls?.opacity === 255}`);
+                    await shot('popups-style-hover-hovered');
+                    await away();
+                } else if (style === 'countdown') {
+                    const line = find(toast, 'earful-toast-line');
+                    result.push(`countdown-line ${!!line}`);
+                    const start = line?.scale_x;
+                    await wait(1000);
+                    result.push(`countdown-runs ${!!line && line.scale_x < start}`);
+                    if (next) {
+                        // On Next the pointer is on the popup too, which holds the line.
+                        await pointAt(pointer, next);
+                        await wait(300);
+                        const held = line?.scale_x;
+                        await wait(1000);
+                        result.push(`countdown-holds ${!!line && Math.abs(line.scale_x - held) < 0.002}`);
+                        const title = find(toast, 'earful-toast-title')?.text;
+                        const asked = nextCalls(log);
+                        click(pointer);
+                        await wait(1200);
+                        result.push(`countdown-next ${nextCalls(log) > asked}`);
+                        result.push(`countdown-follows ${!!title && popups().includes(toast) &&
+                            find(toast, 'earful-toast-title')?.text !== title}`);
+                        const restarted = find(toast, 'earful-toast-line')?.scale_x ?? 0;
+                        result.push(`countdown-restarts ${restarted > 0.95}`);
+                        await away();
+                    }
+                } else if (style === 'island') {
+                    const artist = find(toast, 'earful-toast-artist');
+                    result.push(`island-small ${toast.expanded === false && !seen(artist)}`);
+                    await pointAt(pointer, toast);
+                    await wait(800);
+                    widths.push(`island-expanded:${Math.round(toast.width)}`);
+                    result.push(`island-grows ${toast.expanded === true && near(toast, 400)}`);
+                    result.push(`island-artist ${seen(artist)}`);
+                    result.push(`island-controls ${seen(controls)}`);
+                    await shot('popups-style-island-expanded');
+                    await away();
+                }
+            }
+            const last = settings.get_string('popup-style');
+            settings.reset('popup-style');
+            await wait(300);
+            restyled &&= !popups().some(t => t.styleName === last);
+            result.push(`restyle ${restyled}`);
+            result.push(`widths ${widths.join(' ')}`);
+        } catch (e) {
+            logError(e, 'earful-shots');
+            result.push(`error ${e.message}`);
+        } finally {
+            pointer?.notify_absolute_motion(now(), 10, 400);
+            settings.reset('popup-style');
+            settings.reset('toast-duration');
+            settings.reset('toast-muted-apps');
+            call('Quit', 'org.mpris.MediaPlayer2');
+            GLib.file_set_contents(`${OUT}/popup-styles`, result.join('\n'));
+        }
     }
 
     /** Lots of players: the list scrolls, paused ones can be hidden. */

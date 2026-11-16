@@ -5,6 +5,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Graphene from 'gi://Graphene';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -14,10 +15,20 @@ import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js'
 import {CoverArt} from './art.js';
 import * as Look from './look.js';
 import {SceneLayer} from './scenes.js';
-import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
+import {PlayerControls, SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
-const WIDTH = 380;
-const COVER_SIZE = 72;
+// Each popup style: its width and cover side, in logical pixels.
+const STYLES = {
+    hover: {width: 380, cover: 72},
+    current: {width: 380, cover: 72},
+    countdown: {width: 380, cover: 72},
+    mini: {width: 330, cover: 36, round: true},
+    island: {width: 270, expandedWidth: 400, cover: 30, round: true},
+    big: {width: 250, cover: 228, coverRadius: 14},
+};
+// The scenes (vinyl, road…) are drawn for the wide popup; the other styles
+// take only the design's colors.
+const WIDE_STYLES = ['hover', 'current', 'countdown'];
 // Must match .earful-toast-surface in stylesheet.css (minus the border).
 const RADIUS = 19;
 const MARGIN = 16;
@@ -26,84 +37,91 @@ const SLIDE_IN_MS = 250;
 const MOVE_MS = 350;
 const FADE_OUT_MS = 900;
 const HOVER_GRACE_MS = 1500;
+const HOVER_FADE_MS = 160;
+const SWAP_MS = 350;
 
 const Toast = GObject.registerClass({
-    Signals: {'close-clicked': {}},
+    Signals: {'close-clicked': {}, 'resized': {}},
 }, class Toast extends St.Button {
     _init(player, settings) {
+        const name = settings.get_string('popup-style');
+        const styleName = Object.hasOwn(STYLES, name) ? name : 'hover';
+        const style = STYLES[styleName];
         super._init({
-            style_class: 'earful-toast',
-            width: WIDTH * scaleFactor(),
+            style_class: `earful-toast earful-toast-${styleName}`,
+            width: style.width * scaleFactor(),
             opacity: 0,
         });
         this.player = player;
-        this._settings = settings;
+        this.styleName = styleName;
+        /** Island only: grown on hover to show the artist and the buttons. */
+        this.expanded = false;
         this.dismissing = false;
         this.placed = false;
+        this._style = style;
+        this._settings = settings;
         this._timeoutId = 0;
+        this._onTimeout = null;
+        this._lineTimeline = null;
+        this._trackKey = null;
         this.connect('destroy', () => this.stopTimer());
 
-        // A button centers its child; the card's content starts at the left.
-        const box = new St.BoxLayout({
-            style_class: 'earful-toast-box',
-            x_expand: true,
-            x_align: Clutter.ActorAlign.FILL,
-        });
-        this._art = new CoverArt(COVER_SIZE);
-        box.add_child(this._art);
-
-        const text = new St.BoxLayout({
-            ...VERTICAL,
-            x_expand: true,
-            y_align: Clutter.ActorAlign.CENTER,
-            style_class: 'earful-toast-text',
-        });
-        this._source = new SourceLine('earful-toast-source');
-        this._title = new St.Label({style_class: 'earful-toast-title'});
-        this._artist = new St.Label({style_class: 'earful-toast-artist'});
-        text.add_child(this._source);
-        text.add_child(this._title);
-        text.add_child(this._artist);
-        box.add_child(text);
-        // The design's scene lies under the content, edge to edge.
-        this._scene = new SceneLayer(RADIUS);
         this._surface = new St.Widget({
             style_class: 'earful-toast-surface',
             layout_manager: new Clutter.BinLayout(),
             x_expand: true,
         });
-        this._surface.add_child(this._scene);
-        this._surface.add_child(box);
+        // The design's scene lies under the content, edge to edge.
+        this._scene = null;
+        if (WIDE_STYLES.includes(styleName)) {
+            this._scene = new SceneLayer(RADIUS);
+            this._surface.add_child(this._scene);
+        }
+        this._art = new CoverArt(style.cover,
+            {radius: style.round ? style.cover / 2 : style.coverRadius});
+        this._source = null;
+        this._title = new St.Label({style_class: 'earful-toast-title'});
+        this._artist = new St.Label({style_class: 'earful-toast-artist'});
+        this._text = null;
+        this._controls = null;
+        this._strip = null;
+        this._line = null;
 
         // Closes the popup without raising the player, as a click would.
-        const close = new St.Button({
+        this._close = new St.Button({
             style_class: 'earful-toast-close',
             can_focus: true,
-            x_expand: true,
-            y_expand: true,
-            x_align: Clutter.ActorAlign.END,
-            y_align: Clutter.ActorAlign.START,
             accessible_name: _('Close'),
             child: new St.Icon({icon_name: 'window-close-symbolic'}),
         });
-        close.connect('clicked', () => this.emit('close-clicked'));
-        this._surface.add_child(close);
+        this._close.connect('clicked', () => this.emit('close-clicked'));
+
+        if (styleName === 'mini' || styleName === 'island')
+            this._buildPill();
+        else if (styleName === 'big')
+            this._buildBig();
+        else
+            this._buildWide();
         this.set_child(this._surface);
 
-        // Cover art often arrives a moment after the title; keep it fresh
-        // as long as the same track is shown.
+        // A popup shows what its player plays now: Next pressed in it, or
+        // in the player, swaps the track in place.
         player.connectObject('changed', () => {
             if (this.dismissing)
                 return;
-            if (player.trackKey === this._trackKey)
-                this._art.setPlayer(player);
-            this._restyle();
+            if (player.hasTrack)
+                this.showTrack();
+            else
+                this._restyle();
+            this._controls?.sync();
         }, this);
         this._art.connect('palette-changed', () => this._restyle());
         // Leaving the screen also ends the hover.
         this.connect('notify::hover', () => {
-            if (this.get_stage())
-                this._restyle();
+            if (!this.get_stage() || this.dismissing)
+                return;
+            this._restyle();
+            this._syncHover();
         });
         settings.connectObject(
             'changed::popup-design', () => this._restyle(),
@@ -117,6 +135,145 @@ const Toast = GObject.registerClass({
         this.showTrack();
     }
 
+    // Cover, source line, title and artist, with ✕ in the corner.
+    _buildWide() {
+        // A button centers its child; the content starts at the left.
+        const box = new St.BoxLayout({
+            style_class: 'earful-toast-box',
+            x_expand: true,
+            x_align: Clutter.ActorAlign.FILL,
+        });
+        box.add_child(this._art);
+        box.add_child(this._textColumn(true));
+        this._surface.add_child(box);
+
+        if (this.styleName === 'countdown') {
+            this._controls = new PlayerControls(this.player,
+                {styleClass: 'earful-toast-controls earful-toast-next', previous: false});
+            box.add_child(this._controls);
+            // How long the popup stays: shrinks to nothing, stops on hover.
+            this._line = new St.Widget({
+                style_class: 'earful-toast-line',
+                x_expand: true,
+                y_expand: true,
+                x_align: Clutter.ActorAlign.FILL,
+                y_align: Clutter.ActorAlign.END,
+                pivot_point: new Graphene.Point({x: 0, y: 0.5}),
+            });
+            this._surface.add_child(this._line);
+        } else if (this.styleName === 'hover') {
+            // Fades in at the right end, over the end of the text.
+            this._controls = new PlayerControls(this.player,
+                {styleClass: 'earful-toast-buttons'});
+            this._stripEnd = new St.BoxLayout({
+                style_class: 'earful-toast-strip-end',
+                y_expand: true,
+            });
+            this._stripEnd.add_child(this._controls);
+            this._stripFade = new St.Widget({
+                style_class: 'earful-toast-strip-fade',
+                y_expand: true,
+            });
+            this._strip = new St.BoxLayout({
+                style_class: 'earful-toast-controls',
+                x_expand: true,
+                y_expand: true,
+                x_align: Clutter.ActorAlign.END,
+                y_align: Clutter.ActorAlign.FILL,
+                opacity: 0,
+            });
+            this._strip.add_child(this._stripFade);
+            this._strip.add_child(this._stripEnd);
+            this._surface.add_child(this._strip);
+        }
+
+        Object.assign(this._close, {
+            x_expand: true,
+            y_expand: true,
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.START,
+        });
+        this._surface.add_child(this._close);
+    }
+
+    // One row in a pill: cover, text, buttons and ✕.
+    _buildPill() {
+        const box = new St.BoxLayout({
+            style_class: 'earful-toast-box',
+            x_expand: true,
+            x_align: Clutter.ActorAlign.FILL,
+        });
+        box.add_child(this._art);
+        if (this.styleName === 'island') {
+            box.add_child(this._textColumn(false));
+            this._controls = new PlayerControls(this.player,
+                {styleClass: 'earful-toast-controls'});
+            this._controls.visible = false;
+        } else {
+            // "Title · Artist" on one line.
+            this._title.x_expand = true;
+            this._title.y_align = Clutter.ActorAlign.CENTER;
+            this._text = this._title;
+            box.add_child(this._title);
+            this._controls = new PlayerControls(this.player,
+                {styleClass: 'earful-toast-controls', previous: false});
+        }
+        box.add_child(this._controls);
+        this._close.y_align = Clutter.ActorAlign.CENTER;
+        this._close.add_style_class_name('earful-toast-close-inline');
+        box.add_child(this._close);
+        this._surface.add_child(box);
+    }
+
+    // A column: the big cover, the text and the buttons, with ✕ on the cover.
+    _buildBig() {
+        const column = new St.BoxLayout({
+            ...VERTICAL,
+            style_class: 'earful-toast-box',
+            x_expand: true,
+        });
+        this._art.x_align = Clutter.ActorAlign.CENTER;
+        column.add_child(this._art);
+        column.add_child(this._textColumn(true));
+        this._controls = new PlayerControls(this.player,
+            {styleClass: 'earful-toast-controls'});
+        this._controls.x_align = Clutter.ActorAlign.START;
+        column.add_child(this._controls);
+        this._surface.add_child(column);
+
+        Object.assign(this._close, {
+            x_expand: true,
+            y_expand: true,
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.START,
+        });
+        this._close.add_style_class_name('earful-toast-close-cover');
+        this._surface.add_child(this._close);
+    }
+
+    _textColumn(withSource) {
+        const text = new St.BoxLayout({
+            ...VERTICAL,
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            style_class: 'earful-toast-text',
+        });
+        if (withSource) {
+            this._source = new SourceLine('earful-toast-source');
+            text.add_child(this._source);
+        }
+        text.add_child(this._title);
+        text.add_child(this._artist);
+        this._text = text;
+        return text;
+    }
+
+    /** Width the popup should have now, in physical pixels. */
+    get layoutWidth() {
+        const style = this._style;
+        return (this.expanded ? style.expandedWidth : style.width) * scaleFactor();
+    }
+
     _syncShadow() {
         if (this._settings.get_boolean('toast-shadow'))
             this.remove_style_class_name('earful-toast-flat');
@@ -124,14 +281,40 @@ const Toast = GObject.registerClass({
             this.add_style_class_name('earful-toast-flat');
     }
 
+    _syncHover() {
+        if (this._strip) {
+            this._strip.ease({
+                opacity: this.hover ? 255 : 0,
+                duration: HOVER_FADE_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+        } else if (this.styleName === 'island' && this.expanded !== this.hover) {
+            this.expanded = this.hover;
+            this._syncArtist();
+            this._controls.visible = this.expanded;
+            this.emit('resized');
+        }
+    }
+
+    _syncArtist() {
+        const island = this.styleName === 'island';
+        this._artist.visible = this._artist.text !== '' && (!island || this.expanded);
+    }
+
+    _durationMs() {
+        return this._settings.get_int('toast-duration') * 1000;
+    }
+
     /** Calls onTimeout after ms, replacing a running timer. */
     startTimer(ms, onTimeout) {
         this.stopTimer();
+        this._onTimeout = onTimeout;
         this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
             this._timeoutId = 0;
             onTimeout();
             return GLib.SOURCE_REMOVE;
         });
+        this._runLine(ms);
     }
 
     stopTimer() {
@@ -139,6 +322,55 @@ const Toast = GObject.registerClass({
             GLib.source_remove(this._timeoutId);
             this._timeoutId = 0;
         }
+        this._stopLine();
+    }
+
+    /**
+     * How long to stay once the pointer leaves: the rest of the countdown
+     * line, or a short grace.
+     */
+    resumeMs(grace) {
+        if (!this._line)
+            return grace;
+        return Math.max(grace, Math.round(this._line.scale_x * this._durationMs()));
+    }
+
+    // The line runs from where it is to nothing in ms. Not an ease: it
+    // tells the time, so it moves even with animations off. The timeline
+    // only wakes it up each frame; the clock is the real one, like the
+    // timer's (a timeline's own time can run fast without a real screen).
+    _runLine(ms) {
+        if (!this._line)
+            return;
+        this._stopLine();
+        const from = this._line.scale_x;
+        const start = GLib.get_monotonic_time();
+        const timeline = new Clutter.Timeline({actor: this._line, duration: 1000, repeat_count: -1});
+        timeline.connect('new-frame', () => {
+            const done = Math.min(1, (GLib.get_monotonic_time() - start) / 1000 / Math.max(1, ms));
+            this._line.scale_x = from * (1 - done);
+            if (done >= 1)
+                this._stopLine();
+        });
+        this._lineTimeline = timeline;
+        // A timeline gets frames only once its actor is on screen.
+        if (this._line.mapped)
+            timeline.start();
+        else
+            this._line.connectObject('notify::mapped', () => this._startLine(), this);
+    }
+
+    _startLine() {
+        if (!this._line.mapped)
+            return;
+        this._line.disconnectObject(this);
+        this._lineTimeline?.start();
+    }
+
+    _stopLine() {
+        this._line?.disconnectObject(this);
+        this._lineTimeline?.stop();
+        this._lineTimeline = null;
     }
 
     _restyle() {
@@ -148,19 +380,61 @@ const Toast = GObject.registerClass({
             return;
         const look = Look.lookFromSettings(this._settings, 'popup-');
         const palette = this._art.palette;
-        this._surface.style = Look.surfaceStyle(look, palette, this.hover);
-        this._scene.update(look, palette, this.player.isPlaying);
-        this._source.update(this.player, look.animate, Look.accentColor(look, palette));
+        // The island is always black (stylesheet.css).
+        if (this.styleName !== 'island')
+            this._surface.style = Look.surfaceStyle(look, palette, this.hover);
+        this._scene?.update(look, palette, this.player.isPlaying);
+        this._source?.update(this.player, look.animate, Look.accentColor(look, palette));
+        if (this._strip) {
+            // The buttons' strip fades into the popup's end color; without
+            // a design the stylesheet's colors match the plain popup.
+            const edge = Look.edgeColors(look, palette, this.hover);
+            this._stripFade.style = edge
+                ? `background-gradient-start: ${edge.clear}; background-gradient-end: ${edge.solid};`
+                : '';
+            this._stripEnd.style = edge ? `background-color: ${edge.solid};` : '';
+        }
     }
 
+    /** Shows the player's track; a new one swaps in with a little lift. */
     showTrack() {
         const p = this.player;
+        const isNew = p.trackKey !== this._trackKey;
+        if (isNew && this._trackKey !== null)
+            this._swap();
         this._trackKey = p.trackKey;
         this._art.setPlayer(p);
         this._restyle();
-        this._title.text = p.title;
-        this._artist.text = p.artistText;
-        this._artist.visible = this._artist.text !== '';
+        if (!isNew)
+            return;
+
+        const artist = p.artistText;
+        this._title.text = this.styleName === 'mini' && artist
+            ? `${p.title} · ${artist}`
+            : p.title;
+        this._artist.text = artist;
+        this._syncArtist();
+        if (this._line) {
+            // A new track gets the full time again, shown by a full line.
+            this._stopLine();
+            this._line.scale_x = 1;
+            if (this._timeoutId)
+                this.startTimer(this._durationMs(), this._onTimeout);
+        }
+    }
+
+    _swap() {
+        for (const actor of [this._art, this._text]) {
+            actor.remove_all_transitions();
+            actor.opacity = 0;
+            actor.translation_y = 6 * scaleFactor();
+            actor.ease({
+                opacity: 255,
+                translation_y: 0,
+                duration: SWAP_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+        }
     }
 });
 
@@ -178,6 +452,8 @@ export class ToastManager {
 
         settings.connectObject(
             'changed::toast-position', () => this._relayout(false),
+            // Popups are built for one style; the next track brings the new one.
+            'changed::popup-style', () => this._dismissAll(),
             'changed::focus-mode', () => {
                 if (settings.get_boolean('focus-mode'))
                     this._dismissAll();
@@ -232,19 +508,20 @@ export class ToastManager {
     }
 
     _onTrackChanged(player) {
-        if (!this._shouldShow(player))
-            return;
+        const show = this._shouldShow(player);
 
         // The same player skipping again updates its popup instead of
-        // stacking another one.
+        // stacking another one; it gets more time only if it may show.
         const existing = this._toasts.find(t => t.player === player && !t.dismissing);
         if (existing) {
             existing.showTrack();
-            if (!existing.hover)
+            if (show && !existing.hover)
                 this._startTimer(existing);
             this._relayout(true);
             return;
         }
+        if (!show)
+            return;
 
         this._monitor = this._targetMonitor();
 
@@ -260,8 +537,9 @@ export class ToastManager {
             if (toast.hover)
                 toast.stopTimer();
             else
-                this._startTimer(toast, HOVER_GRACE_MS);
+                this._startTimer(toast, toast.resumeMs(HOVER_GRACE_MS));
         });
+        toast.connect('resized', () => this._relayout(true));
 
         // Like notification banners: above windows, below modal dialogs,
         // the on-screen keyboard and the screenshot UI.
@@ -333,24 +611,24 @@ export class ToastManager {
 
         const workArea = Main.layoutManager.getWorkAreaForMonitor(this._monitor);
         const scale = scaleFactor();
-        const width = WIDTH * scale;
         const margin = MARGIN * scale;
         const spacing = SPACING * scale;
         const [vertical, horizontal] =
             this._settings.get_string('toast-position').split('-');
 
-        let x;
-        if (horizontal === 'left')
-            x = workArea.x + margin;
-        else if (horizontal === 'right')
-            x = workArea.x + workArea.width - width - margin;
-        else
-            x = workArea.x + Math.round((workArea.width - width) / 2);
-
         // Oldest popup sits closest to the screen edge, newer ones line up
-        // behind it, and move up when the ones before them fade out.
+        // behind it, and move up when the ones before them fade out. A
+        // popup that grows (the island) grows away from the screen edge.
         let offset = margin;
         for (const toast of this._toasts) {
+            const width = toast.layoutWidth;
+            let x;
+            if (horizontal === 'left')
+                x = workArea.x + margin;
+            else if (horizontal === 'right')
+                x = workArea.x + workArea.width - width - margin;
+            else
+                x = workArea.x + Math.round((workArea.width - width) / 2);
             const [, height] = toast.get_preferred_height(width);
             const y = vertical === 'top'
                 ? workArea.y + offset
@@ -362,12 +640,13 @@ export class ToastManager {
                 continue;
             if (animate && toast.placed) {
                 toast.ease({
-                    x, y,
+                    x, y, width,
                     duration: MOVE_MS,
                     mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 });
             } else {
                 toast.set_position(x, y);
+                toast.width = width;
                 toast.placed = true;
             }
         }

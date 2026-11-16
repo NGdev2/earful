@@ -111,6 +111,15 @@ const DESIGNS = [
     ['system', () => _('System theme')],
 ];
 
+const POPUP_STYLES = [
+    ['hover', () => _('Controls on hover')],
+    ['current', () => _('Classic, no controls')],
+    ['countdown', () => _('Next button and timer line')],
+    ['mini', () => _('Mini pill')],
+    ['island', () => _('Island')],
+    ['big', () => _('Big cover')],
+];
+
 const COLORS = [
     ['cover', () => _('From the cover')],
     ['purple', () => _('Purple')],
@@ -372,12 +381,12 @@ export default class EarfulPreferences extends ExtensionPreferences {
 
         const popupLook = new Adw.PreferencesGroup({title: _('Look')});
         popupPage.add(popupLook);
-        const popupDesign = choiceRow(window, settings, 'popup-design', _('Design'), DESIGNS,
-            _('Scenes like Vinyl move while music plays.'));
+        const popupStyle = choiceRow(window, settings, 'popup-style', _('Style'), POPUP_STYLES);
+        const popupDesign = choiceRow(window, settings, 'popup-design', _('Design'), DESIGNS);
         const popupColor = choiceRow(window, settings, 'popup-design-color', _('Color'), COLORS);
         const popupOpacity = spinRow(settings, 'popup-design-opacity', _('Opacity (%)'), 40, 100);
         const shadow = switchRow(settings, 'toast-shadow', _('Shadow'));
-        [popupDesign, popupColor, popupOpacity, shadow].forEach(row => popupLook.add(row));
+        [popupStyle, popupDesign, popupColor, popupOpacity, shadow].forEach(row => popupLook.add(row));
 
         const skip = new Adw.PreferencesGroup({title: _('When to stay quiet')});
         popupPage.add(skip);
@@ -397,14 +406,24 @@ export default class EarfulPreferences extends ExtensionPreferences {
         });
         popupPage.add(apps);
 
-        follow(['toasts-enabled', 'popup-design'], () => {
+        follow(['toasts-enabled', 'popup-design', 'popup-style'], () => {
             const on = settings.get_boolean('toasts-enabled');
             popupRows.forEach(row => (row.sensitive = on));
             [popupLook, skip, apps].forEach(group => (group.sensitive = on));
-            // The system theme brings its own colors and background.
+            const style = settings.get_string('popup-style');
+            // The island is always black; the system theme brings its own
+            // colors and background.
+            const island = style === 'island';
             const own = settings.get_string('popup-design') !== 'system';
-            popupColor.sensitive = own;
-            popupOpacity.sensitive = own;
+            popupDesign.sensitive = !island;
+            popupColor.sensitive = !island && own;
+            popupOpacity.sensitive = !island && own;
+            if (island)
+                popupDesign.subtitle = _('The island is always black.');
+            else if (style === 'mini' || style === 'big')
+                popupDesign.subtitle = _('Scenes move only in the wide styles; here the design sets the colors.');
+            else
+                popupDesign.subtitle = _('Scenes like Vinyl move while music plays.');
         });
 
         // Behaviour

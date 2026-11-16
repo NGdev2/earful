@@ -15,8 +15,9 @@
 //                        a few minutes per track when that is 0)
 //   FAKE_PLAYER_NO_SEEK  set to 1 for CanSeek false; SetPosition and Seek
 //                        are then ignored
-//   FAKE_PLAYER_LOG      file that gets a line per SetPosition / Seek call:
-//                        "setposition <seconds>" / "seek <seconds>"
+//   FAKE_PLAYER_LOG      file that gets a line per SetPosition / Seek / Next
+//                        call: "setposition <seconds>" / "seek <seconds>" /
+//                        "next"
 //   FAKE_PLAYER_SEEK_MODE how a seek is answered: "normal" (move, emit
 //                        Seeked), "ignore" (stay put, like YouTube during an
 //                        ad), "silent" (move without Seeked) or "announce"
@@ -240,6 +241,7 @@ const player = {
         setStatus('Stopped');
     },
     Next() {
+        logCall('next');
         changeTrack(1);
     },
     Previous() {

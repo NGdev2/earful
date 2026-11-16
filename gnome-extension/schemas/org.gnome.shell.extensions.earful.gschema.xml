@@ -185,6 +185,19 @@
       <default>92</default>
       <summary>How opaque cards are, in percent</summary>
     </key>
+    <key name="popup-style" type="s">
+      <choices>
+        <choice value="hover"/>
+        <choice value="current"/>
+        <choice value="countdown"/>
+        <choice value="mini"/>
+        <choice value="island"/>
+        <choice value="big"/>
+      </choices>
+      <default>'hover'</default>
+      <summary>Shape of the now-playing popups</summary>
+      <description>hover: buttons appear when pointed at. current: no buttons. countdown: a Next button and a line showing how long the popup stays. mini: a one-line pill. island: a black pill that grows on hover. big: a large cover with buttons under it.</description>
+    </key>
     <key name="popup-design" type="s">
       <choices>
         <choice value="cover"/>

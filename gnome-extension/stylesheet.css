@@ -359,6 +359,126 @@
   opacity: 0.8;
 }
 
+/* Popup buttons: white on the popup's colors. */
+.earful-toast .earful-control {
+  color: #fafafa;
+}
+
+.earful-toast .earful-control:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.earful-toast .earful-play {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.earful-toast .earful-play:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Controls on hover: a strip at the right end that fades in. The colors
+   here match the plain popup; designs set their own inline. */
+.earful-toast-strip-fade {
+  width: 30px;
+  background-gradient-direction: horizontal;
+  background-gradient-start: rgba(40, 40, 46, 0);
+  background-gradient-end: rgba(40, 40, 46, 0.96);
+}
+
+.earful-toast-strip-end {
+  /* Below the close button. */
+  padding: 8px 8px 0 0;
+  border-radius: 0 19px 19px 0;
+  background-color: rgba(40, 40, 46, 0.96);
+}
+
+/* Next + countdown line */
+.earful-toast-next {
+  margin: 14px 6px 0 0;
+}
+
+.earful-toast-next .earful-control {
+  padding: 9px;
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.earful-toast-next .earful-control:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+.earful-toast-line {
+  height: 3px;
+  margin: 0 20px 3px 20px;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.55);
+}
+
+/* Mini pill and island: one row with round corners. */
+.earful-toast-mini,
+.earful-toast-mini .earful-toast-surface,
+.earful-toast-island,
+.earful-toast-island .earful-toast-surface {
+  border-radius: 99px;
+}
+
+.earful-toast-mini .earful-toast-box,
+.earful-toast-island .earful-toast-box {
+  spacing: 10px;
+  padding: 6px 8px 6px 6px;
+}
+
+.earful-toast-mini .earful-cover,
+.earful-toast-island .earful-cover {
+  border-radius: 99px;
+}
+
+.earful-toast-island .earful-toast-text {
+  padding-right: 0;
+}
+
+.earful-toast-mini .earful-toast-controls .earful-control {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.earful-toast-mini .earful-toast-controls .earful-control:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+.earful-toast-close-inline {
+  margin: 0;
+}
+
+.earful-toast-island .earful-toast-surface,
+.earful-toast-island:hover .earful-toast-surface {
+  background-color: #050506;
+}
+
+/* Big cover: a column, the close button on the cover. */
+.earful-toast-big .earful-toast-box {
+  spacing: 10px;
+  padding: 10px;
+}
+
+.earful-toast-big .earful-cover {
+  border-radius: 14px;
+}
+
+.earful-toast-big .earful-toast-text {
+  padding: 0 4px 2px 4px;
+}
+
+/* 16px from the popup's edge, counting the 1px border. */
+.earful-toast-close-cover {
+  margin: 15px;
+  opacity: 0.8;
+  background-color: rgba(0, 0, 0, 0.35);
+}
+
+.earful-toast-close-cover:hover,
+.earful-toast-close-cover:focus {
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
 /* Dancing bars next to what is playing */
 
 .earful-eq {

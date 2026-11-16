@@ -22,7 +22,7 @@ import {VerticalVolume} from './volumeStyles.js';
 import {CoverVolume} from './coverVolume.js';
 import {DuoBars, SwapLine} from './listBars.js';
 import {SceneLayer} from './scenes.js';
-import {SourceLine, VERTICAL, scaleFactor} from './widgets.js';
+import {PlayerControls, SourceLine, VERTICAL, scaleFactor} from './widgets.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -40,17 +40,6 @@ function openSettings(extension) {
         Main.notify(_('Settings of “%s” are open').format(window.get_title()),
             _('Close them to open Earful\'s settings.'));
     }
-}
-
-function controlButton(iconName, onClick) {
-    const button = new St.Button({
-        style_class: 'earful-control',
-        can_focus: true,
-        y_align: Clutter.ActorAlign.CENTER,
-        child: new St.Icon({icon_name: iconName}),
-    });
-    button.connect('clicked', onClick);
-    return button;
 }
 
 // Width of a slide-out volume bar, in logical pixels.
@@ -238,22 +227,11 @@ const PlayerItem = GObject.registerClass({
             this.hide();
         });
 
-        this._prev = controlButton('media-skip-backward-symbolic',
-            () => player.previous());
-        this._playPause = controlButton('media-playback-start-symbolic',
-            () => player.playPause());
-        this._playPause.add_style_class_name('earful-play');
-        this._next = controlButton('media-skip-forward-symbolic',
-            () => player.next());
-        const controls = new St.BoxLayout({
-            style_class: 'earful-controls',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
+        const controls = new PlayerControls(player);
+        this._controls = controls;
+        this._prev = controls.previous;
         // Hidden in compact rows, but still in the row so it's destroyed with it.
         this._prev.visible = style !== 'compact';
-        controls.add_child(this._prev);
-        controls.add_child(this._playPause);
-        controls.add_child(this._next);
 
         this._volumeSource = new VolumeSource(audio);
         this.connect('destroy', () => this._volumeSource.destroy());
@@ -501,16 +479,10 @@ const PlayerItem = GObject.registerClass({
         this._title.text = p.title;
         this._artist.text = p.artistText;
         this._artist.visible = this._artist.text !== '';
-        this._playPause.child.icon_name = p.isPlaying
-            ? 'media-playback-pause-symbolic'
-            : 'media-playback-start-symbolic';
+        this._controls.sync();
         this._dismiss.visible = !p.isPlaying;
         // Back on the list when it plays again, even while the menu is open.
         this.visible = !p.dismissed;
-        this._prev.reactive = p.canGoPrevious;
-        this._next.reactive = p.canGoNext;
-        this._prev.opacity = p.canGoPrevious ? 255 : 100;
-        this._next.opacity = p.canGoNext ? 255 : 100;
 
         if (p.isPlaying)
             this.add_style_pseudo_class('playing');

@@ -6,6 +6,8 @@ import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
+import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+
 // Constructor properties for a vertical St.BoxLayout. GNOME 48 added
 // `orientation` and GNOME 51 removed the older `vertical`.
 export const VERTICAL = GObject.Object.find_property.call(St.BoxLayout, 'orientation')
@@ -16,6 +18,67 @@ export const VERTICAL = GObject.Object.find_property.call(St.BoxLayout, 'orienta
 export function scaleFactor() {
     return St.ThemeContext.get_for_stage(global.stage).scale_factor;
 }
+
+/** A round icon button, e.g. play or next. */
+export function controlButton(iconName, accessibleName, onClick) {
+    const button = new St.Button({
+        style_class: 'earful-control',
+        can_focus: true,
+        y_align: Clutter.ActorAlign.CENTER,
+        accessible_name: accessibleName,
+        child: new St.Icon({icon_name: iconName}),
+    });
+    button.connect('clicked', onClick);
+    return button;
+}
+
+/**
+ * Previous, play/pause and next for one player. sync() follows the player:
+ * the play/pause icon, and dimmed skip buttons the player can't use.
+ */
+export const PlayerControls = GObject.registerClass(
+class PlayerControls extends St.BoxLayout {
+    /**
+     * @param {object} player
+     * @param {object} [options]
+     * @param {string} [options.styleClass]
+     * @param {boolean} [options.previous] include previous and play/pause
+     *   (without them it's a lone next button)
+     */
+    _init(player, {styleClass = 'earful-controls', previous = true} = {}) {
+        super._init({style_class: styleClass, y_align: Clutter.ActorAlign.CENTER});
+        this._player = player;
+        if (previous) {
+            this.previous = controlButton('media-skip-backward-symbolic',
+                _('Previous'), () => player.previous());
+            this.playPause = controlButton('media-playback-start-symbolic',
+                _('Play'), () => player.playPause());
+            this.playPause.add_style_class_name('earful-play');
+            this.add_child(this.previous);
+            this.add_child(this.playPause);
+        }
+        this.next = controlButton('media-skip-forward-symbolic',
+            _('Next'), () => player.next());
+        this.add_child(this.next);
+        this.sync();
+    }
+
+    sync() {
+        const p = this._player;
+        if (this.playPause) {
+            this.playPause.child.icon_name = p.isPlaying
+                ? 'media-playback-pause-symbolic'
+                : 'media-playback-start-symbolic';
+            this.playPause.accessible_name = p.isPlaying ? _('Pause') : _('Play');
+        }
+        if (this.previous) {
+            this.previous.reactive = p.canGoPrevious;
+            this.previous.opacity = p.canGoPrevious ? 255 : 100;
+        }
+        this.next.reactive = p.canGoNext;
+        this.next.opacity = p.canGoNext ? 255 : 100;
+    }
+});
 
 const BARS = 3;
 // Heights the bars rest at between dances.

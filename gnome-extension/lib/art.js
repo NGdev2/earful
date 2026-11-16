@@ -231,8 +231,13 @@ const RoundedCorners = GLSLCorners || PipelineCorners;
 export const CoverArt = GObject.registerClass({
     Signals: {'palette-changed': {}},
 }, class CoverArt extends St.Bin {
-    /** @param {number} size side in logical pixels */
-    _init(size) {
+    /**
+     * @param {number} size side in logical pixels
+     * @param {object} [options]
+     * @param {number} [options.radius] corner radius of the cover, a fifth
+     *   of the side by default (half makes it round)
+     */
+    _init(size, {radius = Math.round(size / 5)} = {}) {
         super._init({
             style_class: 'earful-cover',
             style: `width: ${size}px; height: ${size}px;`,
@@ -244,7 +249,7 @@ export const CoverArt = GObject.registerClass({
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.set_child(this._icon);
-        this._corners = new RoundedCorners(Math.round(size / 5));
+        this._corners = new RoundedCorners(radius);
         this._request = null;
         /** Colors of the shown cover, or null while there is none. */
         this.palette = null;
