@@ -44,6 +44,8 @@ function openSettings(extension) {
 
 // Width of a slide-out volume bar, in logical pixels.
 const SLIDE_WIDTH = 90;
+// How much of a card's art is left at volume 0.
+const QUIET_ART = 0.3;
 
 /** A small horizontal volume slider: speaker (mute) and bar. */
 const VolumeSlider = GObject.registerClass(
@@ -283,7 +285,10 @@ const PlayerItem = GObject.registerClass({
             'changed::design-color', () => this._restyle(),
             'changed::design-opacity', () => this._restyle(),
             'changed::animations', () => this._restyle(),
+            'changed::art-follows-volume', () => this._syncArt(),
             this);
+        if (this._scene)
+            this._volumeSource.connectObject('changed', () => this._syncArt(), this);
         this._art.connect('palette-changed', () => {
             this._restyle();
             this.emit('palette-changed');
@@ -478,6 +483,17 @@ const PlayerItem = GObject.registerClass({
             this._volumeSource.bindPlayer(this.player);
         else
             this._volumeSource.bindStreams(this._audio.streamsFor(this.player));
+    }
+
+    /**
+     * The design's art dims as the volume goes down, never out of sight. A
+     * player without a known volume shows it fully.
+     */
+    _syncArt() {
+        const volume = this._settings.get_boolean('art-follows-volume')
+            ? this._volumeSource.read() : null;
+        this._scene?.setStrength(volume === null
+            ? 1 : QUIET_ART + (1 - QUIET_ART) * Math.clamp(volume, 0, 1));
     }
 
     _syncPin() {

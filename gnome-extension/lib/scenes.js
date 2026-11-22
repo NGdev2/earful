@@ -17,6 +17,8 @@ import {scaleFactor} from './widgets.js';
 
 const TAU = 2 * Math.PI;
 const FRAME_SECONDS = 1 / 30;
+// A scene's change of strength, e.g. when the volume moves.
+const STRENGTH_MS = 200;
 const WHITE = [1, 1, 1];
 const YELLOW = [1, 0.84, 0.22];
 const RED = [1, 0.3, 0.24];
@@ -476,6 +478,7 @@ class SceneLayer extends St.DrawingArea {
         // Paused and done moving: no need to wake up for frames.
         this._settled = false;
         this._timeline = null;
+        this._strength = 1;
 
         this.connect('repaint', () => this._paint());
         this.connect('notify::mapped', () => this._syncClock());
@@ -503,6 +506,18 @@ class SceneLayer extends St.DrawingArea {
         this._animate = look.animate;
         this._syncClock();
         this.queue_repaint();
+    }
+
+    /** How clearly the scene shows: 1 fully, less fades it toward the card. */
+    setStrength(strength) {
+        if (strength === this._strength)
+            return;
+        this._strength = strength;
+        this.ease({
+            opacity: Math.round(255 * strength),
+            duration: this.mapped ? STRENGTH_MS : 0,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
     }
 
     _syncClock() {

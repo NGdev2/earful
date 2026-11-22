@@ -169,6 +169,8 @@ if [ -n "$SHOTS" ]; then
     check '[ "$(grep -cE "^(standing|side)-volume-[a-z]+ true$" "$C")" = 8 ]' "both card layouts show all 4 volume styles"
     check 'grep -qx "slim true" "$C"' "slim cards: edge progress grows on hover, slide-out volume"
     check '[ "$(grep -cE "^cover-[a-z]+ true$" "$C")" = 10 ]' "volume on the cover shows all 10 animations"
+    check 'grep -qx "art-dims true" "$C"' "a card's art dims as its volume goes down"
+    check 'grep -qx "art-switch true" "$C"' "and stays bright with the switch off"
     check '! grep -q "^error" "$C"' "card layout test ran without errors"
     L="$SHOTS/list-layouts"
     check 'grep -qx "cover-volume-time-left true" "$L"' "list: volume on the cover with the edge progress"

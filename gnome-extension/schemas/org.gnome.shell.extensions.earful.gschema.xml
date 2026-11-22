@@ -185,6 +185,10 @@
       <default>92</default>
       <summary>How opaque cards are, in percent</summary>
     </key>
+    <key name="art-follows-volume" type="b">
+      <default>true</default>
+      <summary>Dim the design's art on a card as its volume goes down</summary>
+    </key>
     <key name="popup-style" type="s">
       <choices>
         <choice value="hover"/>

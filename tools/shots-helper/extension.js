@@ -413,10 +413,36 @@ export default class ShotsHelper extends Extension {
                 earful.menu.close(false);
                 await wait(400);
             }
+
+            // The design's art dims with the volume; the switch stops that.
+            settings.reset('card-layout');
+            settings.set_string('design', 'vinyl');
+            await wait(500);
+            earful.menu.open(false);
+            await wait(1200);
+            const card = earful._section._getMenuItems()
+                .find(i => i._scene && i._volumeSource.read() !== null);
+            const dims = [];
+            for (const volume of [1, 0.5, 0]) {
+                card?._volumeSource.apply(volume);
+                await wait(900);
+                dims.push(card?._scene.opacity);
+                await shot(`card-art-volume-${volume * 100}`);
+            }
+            const about = (value, want) => Math.abs(value - 255 * want) <= 3;
+            result.push(`art-dims ${!!card && about(dims[0], 1) && about(dims[1], 0.65) && about(dims[2], 0.3)}`);
+            settings.set_boolean('art-follows-volume', false);
+            await wait(500);
+            result.push(`art-switch ${card?._scene.opacity === 255}`);
+            card?._volumeSource.apply(1);
+            earful.menu.close(false);
+            await wait(400);
         } catch (e) {
             logError(e, 'earful-shots');
             result.push(`error ${e.message}`);
         } finally {
+            settings.reset('design');
+            settings.reset('art-follows-volume');
             settings.reset('card-layout');
             settings.reset('card-volume-style');
             settings.reset('cover-volume-animation');

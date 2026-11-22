@@ -111,6 +111,9 @@ const DESIGNS = [
     ['system', () => _('System theme')],
 ];
 
+// The designs that draw a scene.
+const SCENE_DESIGNS = ['vinyl', 'wave', 'leds', 'road', 'cassette'];
+
 const POPUP_STYLES = [
     ['hover', () => _('Controls on hover')],
     ['current', () => _('Classic, no controls')],
@@ -333,9 +336,12 @@ export default class EarfulPreferences extends ExtensionPreferences {
             _('Scenes like Vinyl move while music plays.'));
         const color = choiceRow(window, settings, 'design-color', _('Color'), COLORS);
         const opacity = spinRow(settings, 'design-opacity', _('Opacity (%)'), 40, 100);
+        const artVolume = switchRow(settings, 'art-follows-volume', _('Art follows the volume'),
+            _('The vinyl, cassette and other scenes dim as you turn a player down.'));
         look.add(design);
         look.add(color);
         look.add(opacity);
+        look.add(artVolume);
         look.add(choiceRow(window, settings, 'menu-background', _('Menu background'),
             MENU_BACKGROUNDS, _('Match the music takes the colors of the song that is playing.')));
 
@@ -360,6 +366,7 @@ export default class EarfulPreferences extends ExtensionPreferences {
             // dark or music-colored menu background.
             design.sensitive = cards;
             const painted = cards && settings.get_string('design') !== 'system';
+            artVolume.sensitive = cards && SCENE_DESIGNS.includes(settings.get_string('design'));
             const tinted = ['dark', 'music'].includes(settings.get_string('menu-background'));
             color.sensitive = painted || tinted;
             opacity.sensitive = painted || tinted;
