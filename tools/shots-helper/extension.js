@@ -435,6 +435,13 @@ export default class ShotsHelper extends Extension {
             await wait(500);
             result.push(`art-switch ${card?._scene.opacity === 255}`);
             card?._volumeSource.apply(1);
+
+            // The podcast has no covers: its card is orange like its icon.
+            const podcast = earful._section._getMenuItems()
+                .find(i => i.player?.identity === 'Podcasts');
+            const [r, g, b] = podcast?.coverPalette?.start ?? [];
+            result.push(`icon-colors ${r > g && g > b}`);
+            await shot('card-icon-colors');
             earful.menu.close(false);
             await wait(400);
         } catch (e) {
@@ -670,7 +677,7 @@ export default class ShotsHelper extends Extension {
         const name = 'Styles';
         const log = `${OUT}/popup-styles-calls.log`;
         GLib.unlink(log);
-        settings.set_strv('toast-muted-apps', ['spotify', 'podcasts']);
+        settings.set_strv('toast-muted-apps', ['spotify', 'earful-test-podcasts']);
         settings.set_int('toast-duration', 30);
         const env = GLib.environ_setenv(GLib.get_environ(), 'FAKE_PLAYER_LOG', log, true);
         GLib.spawn_async(null, ['gjs', '-m', `${GLib.getenv('ROOT')}/tools/fake-player.js`, name, '0',

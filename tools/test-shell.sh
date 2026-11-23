@@ -45,6 +45,12 @@ mkdir -p "$WORK/home/.mozilla/firefox" "$WORK/config/google-chrome" "$WORK/home/
 unzip -q "$ROOT/dist/$UUID.shell-extension.zip" -d "$EXT"
 glib-compile-schemas "$EXT/schemas"
 mkdir -p "$WORK/covers"
+# An orange app icon for the podcast player, which has no covers.
+mkdir -p "$WORK/data/applications" "$WORK/data/icons/hicolor/scalable/apps"
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><circle cx="24" cy="24" r="22" fill="#e66100"/></svg>\n' \
+    > "$WORK/data/icons/hicolor/scalable/apps/earful-test-podcasts.svg"
+printf '[Desktop Entry]\nType=Application\nName=Podcasts\nExec=true\nIcon=earful-test-podcasts\n' \
+    > "$WORK/data/applications/earful-test-podcasts.desktop"
 gjs -m "$ROOT/tools/make-covers.js" "$WORK/covers" || exit 1
 
 EXTENSIONS="['$UUID']"
@@ -102,7 +108,7 @@ check prefs_up "settings window running"
 # podcast is a live stream, without a length. (The progress bar test uses a
 # player of its own that doesn't skip.)
 FAKE_PLAYER_LENGTH=240 gjs -m "$ROOT/tools/fake-player.js" Spotify 2 "$WORK/covers" >/dev/null 2>&1 &
-FAKE_PLAYER_LENGTH=0 gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2>&1 &
+FAKE_PLAYER_LENGTH=0 FAKE_PLAYER_DESKTOP=earful-test-podcasts gjs -m "$ROOT/tools/fake-player.js" Podcasts 3 >/dev/null 2>&1 &
 P2=$!
 sleep "$STEP"
 if [ -n "$SHOTS" ]; then
@@ -171,6 +177,7 @@ if [ -n "$SHOTS" ]; then
     check '[ "$(grep -cE "^cover-[a-z]+ true$" "$C")" = 10 ]' "volume on the cover shows all 10 animations"
     check 'grep -qx "art-dims true" "$C"' "a card's art dims as its volume goes down"
     check 'grep -qx "art-switch true" "$C"' "and stays bright with the switch off"
+    check 'grep -qx "icon-colors true" "$C"' "a card without a cover takes the app icon's colors"
     check '! grep -q "^error" "$C"' "card layout test ran without errors"
     L="$SHOTS/list-layouts"
     check 'grep -qx "cover-volume-time-left true" "$L"' "list: volume on the cover with the edge progress"

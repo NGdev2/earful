@@ -64,19 +64,22 @@ export function hslToRgb([h, s, l]) {
 }
 
 /**
- * The cover's main colors, toned for a card under white text:
+ * The main colors of a cover or app icon, toned for a card under white text:
  * {start, end} for the background gradient, {accent} for sliders.
+ * Null when the picture is see-through, or grey and greyOnly is false.
  */
-function makePalette(pixbuf) {
+function makePalette(pixbuf, {greyOnly = true} = {}) {
     const tiny = pixbuf.scale_simple(12, 12, GdkPixbuf.InterpType.BILINEAR);
     const pixels = tiny.get_pixels();
-    const {rowstride, n_channels: channels} = tiny;
+    const {rowstride, n_channels: channels, has_alpha: alpha} = tiny;
 
     // Weigh colors by how vivid they are, grouped by hue.
     const groups = new Map();
     for (let y = 0; y < 12; y++) {
         for (let x = 0; x < 12; x++) {
             const i = y * rowstride + x * channels;
+            if (alpha && pixels[i + 3] < 128)
+                continue;
             const [h, s, l] = rgbToHsl([pixels[i], pixels[i + 1], pixels[i + 2]]);
             const key = s < 0.15 || l < 0.08 || l > 0.94 ? 'grey' : Math.floor(h * 12);
             const weight = key === 'grey' ? 0.3 : 0.3 + s * (1 - Math.abs(l - 0.5));
@@ -94,6 +97,8 @@ function makePalette(pixbuf) {
     const grey = groups.get('grey');
     if (grey && grey.weight < total * 0.85)
         groups.delete('grey');
+    if (!groups.size || (!greyOnly && groups.has('grey')))
+        return null;
     const ranked = [...groups.values()].sort((a, b) => b.weight - a.weight)
         .map(g => [
             (Math.atan2(g.h[1], g.h[0]) / (2 * Math.PI) + 1) % 1,
@@ -152,8 +157,29 @@ function loadCover(url, trackKey) {
     return promise;
 }
 
+// Colors of app icons, by icon; null for grey and symbolic ones.
+const iconPalettes = new Map();
+
+/** Colors of an app icon, for a card that has no cover. */
+function iconPalette(gicon) {
+    const key = gicon.to_string();
+    if (!iconPalettes.has(key)) {
+        let palette = null;
+        try {
+            const pixbuf = new St.IconTheme().lookup_by_gicon(gicon, 48,
+                St.IconLookupFlags.FORCE_SIZE)?.load_icon();
+            palette = pixbuf ? makePalette(pixbuf, {greyOnly: false}) : null;
+        } catch {
+            // Not in the theme or not readable: plain colors.
+        }
+        iconPalettes.set(key, palette);
+    }
+    return iconPalettes.get(key);
+}
+
 export function clearCache() {
     cache.clear();
+    iconPalettes.clear();
 }
 
 const CORNER_DECLARATIONS = `
@@ -226,7 +252,7 @@ const RoundedCorners = GLSLCorners || PipelineCorners;
 
 /**
  * A player's cover, or its app icon on a tinted tile while there is none
- * (or while the cover loads).
+ * (or while the cover loads). Without a cover the colors come from the icon.
  */
 export const CoverArt = GObject.registerClass({
     Signals: {'palette-changed': {}},
@@ -251,7 +277,7 @@ export const CoverArt = GObject.registerClass({
         this.set_child(this._icon);
         this._corners = new RoundedCorners(radius);
         this._request = null;
-        /** Colors of the shown cover, or null while there is none. */
+        /** Colors of the shown cover or app icon, or null for plain colors. */
         this.palette = null;
         this.connect('destroy', () => (this._icon = null));
     }
@@ -266,7 +292,7 @@ export const CoverArt = GObject.registerClass({
         // The previous cover stays until the next one is ready, so
         // skipping tracks doesn't flash the app icon and plain colors.
         const appIcon = player.appIcon;
-        if (!this.palette)
+        if (!this.has_style_pseudo_class('cover'))
             this._showIcon(appIcon);
         loadCover(player.artUrl, player.trackKey).then(cover => {
             // Still the same track, and not destroyed meanwhile.
@@ -276,7 +302,7 @@ export const CoverArt = GObject.registerClass({
                 this._showCover(cover.icon);
             else
                 this._showIcon(appIcon);
-            this._setPalette(cover?.palette ?? null);
+            this._setPalette(cover ? cover.palette : iconPalette(appIcon));
         });
     }
 

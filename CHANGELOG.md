@@ -8,6 +8,7 @@ New
 - A standing volume in four styles: LED steps (default), knob, pill and line.
 - Volume on the cover: scroll on the cover to change the volume, with one of ten animations. The default, Liquid, fills the cover like a glass of water.
 - The art of a card design (vinyl, cassette and the others) dims as you turn its player down; a switch in Settings turns that off.
+- A player without a cover takes the colors of its app's icon instead of plain grey.
 - List layouts: volume on the cover (new default), one line for progress and volume, and two bars side by side.
 - Copy a title or artist with a click; long titles slide on hover.
 - Popup styles: controls on hover (new default), classic, Next with a countdown line, mini pill, island and big cover.
