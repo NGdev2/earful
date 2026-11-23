@@ -44,12 +44,19 @@ const POPUP_STYLES = {
         ['island', 'Island'], ['big', 'Big cover'],
     ],
     pointed: ['hover', 'island'],
+    // Big cover is left out of the clip: alone it would make it three
+    // times as tall. popup-styles.png and docs/looks.md show it.
+    inClip: style => style !== 'big',
 };
 
 // Where the settings window's page tabs are, from the middle of its title
 // bar (measured on a 620 px window).
 const SETTINGS_TABS = [-123, 0, 123];
 const SETTINGS_PAGES = ['menu', 'popups', 'behaviour'];
+
+// Width of the popup stills in docs/looks.md: the grown island (400 px),
+// its 16 px from the screen edge and room for its shadow.
+const LOOKS_POPUP_WIDTH = 452;
 
 const wait = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
     resolve();
@@ -133,6 +140,7 @@ class Recorder {
         GLib.mkdir_with_parents(this._dir, 0o755);
         this._box = grow(box, 0);
         this._times = [];
+        this._fades = [];
         this._recording = true;
         this._done = this._loop();
     }
@@ -163,10 +171,25 @@ class Recorder {
             GLib.file_set_contents(`${this._dir}/crop`, `${width}:${height}:${left - bx}:${top - by}`);
     }
 
+    /** The number of the next frame. */
+    mark() {
+        return this._times.length;
+    }
+
+    /**
+     * Turns the frames from `from` (a mark() taken just before a change)
+     * up to now into a crossfade, done by crossfade.js after recording.
+     */
+    fade(from) {
+        this._fades.push(`${from} ${this.mark()}`);
+    }
+
     /** Stops and writes an ffmpeg concat list with each frame's duration. */
     async stop() {
         this._recording = false;
         await this._done;
+        if (this._fades.length)
+            GLib.file_set_contents(`${this._dir}/fades`, `${this._fades.join('\n')}\n`);
         const end = GLib.get_monotonic_time();
         const lines = this._times.map((time, i) => {
             const duration = ((this._times[i + 1] ?? end) - time) / 1e6;
@@ -413,17 +436,36 @@ export default class DemoDirector extends Extension {
         return rec;
     }
 
+    /** The next config of a tour, crossfading in the clip. */
+    async _switchTo(rec, config, apply) {
+        const from = rec.mark();
+        apply(config);
+        await this._relayout(config.at(-1));
+        await wait(100);
+        rec.fade(from);
+    }
+
     /** Opens the menu and finds a crop that fits it in every config. */
     async _openForTour(configs, apply) {
         this._earful.menu.open(false);
         await wait(700);
         let box = null;
+        let width = 0;
         for (const config of configs) {
             apply(config);
             await this._relayout();
             box = union(box, this._menuBox());
+            width = Math.max(width, this._earful.menu.box.width);
         }
-        return this._menuCrop(box, true);
+        // Each config as wide as the widest, so nothing shifts sideways
+        // when one crossfades into the next (_endTour() lets go).
+        this._earful.menu.box.min_width = width;
+        await this._relayout();
+        return this._menuCrop(union(box, this._menuBox()), true);
+    }
+
+    _endTour() {
+        this._earful.menu.box.min_width_set = false;
     }
 
     _showCaption(text) {
@@ -466,9 +508,11 @@ export default class DemoDirector extends Extension {
         // The players, and a moment for their covers.
         for (let i = 0; i < 80 && this._earful._manager.players.length < 3; i++)
             await wait(250);
-        await setVolume(SPOTIFY, 0.74);
-        await setVolume(YOUTUBE, 0.86);
+        // Spotify last: the top bar shows the player changed last, and the
+        // hero starts on Spotify's song.
         await setVolume(SOUNDCLOUD, 0.8);
+        await setVolume(YOUTUBE, 0.86);
+        await setVolume(SPOTIFY, 0.74);
         await wait(3000);
 
         if (wanted('hero'))
@@ -636,10 +680,8 @@ export default class DemoDirector extends Extension {
         const box = await this._openForTour(configs, apply);
         const rec = await this._startTour('cards', box, configs, apply);
         for (const [i, config] of configs.entries()) {
-            if (i > 0) {
-                apply(config);
-                await this._relayout(config.at(-1));
-            }
+            if (i > 0)
+                await this._switchTo(rec, config, apply);
             const item = this._items()[0];
             if (item._vvolume) {
                 // The tip low on the control, so the level stays in sight.
@@ -670,6 +712,7 @@ export default class DemoDirector extends Extension {
         this._caption.hide();
         mouse.park();
         await this._closeMenu();
+        this._endTour();
         settings.reset('card-layout');
         settings.reset('card-volume-style');
         await wait(300);
@@ -737,10 +780,8 @@ export default class DemoDirector extends Extension {
         const box = await this._openForTour(configs, apply);
         const rec = await this._startTour('list', box, configs, apply);
         for (const [i, config] of configs.entries()) {
-            if (i > 0) {
-                apply(config);
-                await this._relayout(config.at(-1));
-            }
+            if (i > 0)
+                await this._switchTo(rec, config, apply);
             const item = this._items()[0];
             const bars = item._listBars;
             if (item._coverVolume) {
@@ -782,6 +823,7 @@ export default class DemoDirector extends Extension {
         this._caption.hide();
         mouse.park();
         await this._closeMenu();
+        this._endTour();
         settings.reset('list-layout');
         settings.reset('menu-style');
         await wait(300);
@@ -880,7 +922,7 @@ export default class DemoDirector extends Extension {
         settings.set_string('toast-position', 'top-right');
         settings.set_int('toast-duration', 3);
         // Room for the biggest; the clip is cut to what was used.
-        const area = [STAGE_WIDTH - 600, 0, 600, 520];
+        const area = [STAGE_WIDTH - 600, 0, 600, 260];
         const rec = new Recorder('popup-styles', area);
         let used = null;
         const see = () => {
@@ -889,7 +931,7 @@ export default class DemoDirector extends Extension {
                 used = union(used, popup);
             return popup;
         };
-        for (const [value, label] of values) {
+        for (const [value, label] of values.filter(([v]) => POPUP_STYLES.inClip(v))) {
             settings.set_string(key, value);
             await wait(200);
             await next(SPOTIFY);
@@ -1077,14 +1119,18 @@ export default class DemoDirector extends Extension {
             await wait(200);
             await next(SPOTIFY);
             await wait(1200);
+            // All but the big cover as wide as the widest (the grown island),
+            // right-aligned as on the screen, so the stills line up.
+            const fit = popup => (popup && style !== 'big'
+                ? [STAGE_WIDTH - LOOKS_POPUP_WIDTH, popup[1], LOOKS_POPUP_WIDTH, popup[3]] : popup);
             const box = this._popupBox();
             if (box)
-                await this._shot(`looks/popup-${style}`, box);
+                await this._shot(`looks/popup-${style}`, fit(box));
             if (box && POPUP_STYLES.pointed.includes(style)) {
                 // The pointer itself stays hidden.
                 await mouse.moveTo(box[0] + box[2] * 0.4, box[1] + box[3] / 2, 300);
                 await wait(900);
-                await this._shot(`looks/popup-${style}-pointed`, this._popupBox() ?? box);
+                await this._shot(`looks/popup-${style}-pointed`, fit(this._popupBox() ?? box));
                 mouse.park();
             }
             for (let i = 0; i < 60 && popupsOnScreen(); i++)

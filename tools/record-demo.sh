@@ -13,6 +13,7 @@
 #   list copy popups settings. popup-styles and looks (the stills for
 #   docs/looks.md, into docs/media/looks/) run only when named.
 #   Through make: DEMO_SCENES=cards,list make demo
+#   KEEP_LOGS=<dir> keeps the shell log, KEEP_FRAMES=<dir> the raw frames.
 
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -120,6 +121,7 @@ if grep -E "JS ERROR|earful-demo" "$WORK/shell.log"; then
     echo "The recording hit errors (above)."
 fi
 [ -n "${KEEP_LOGS:-}" ] && mkdir -p "$KEEP_LOGS" && cp "$WORK/shell.log" "$KEEP_LOGS/"
+[ -n "${KEEP_FRAMES:-}" ] && mkdir -p "$KEEP_FRAMES" && cp -r "$WORK/frames/." "$KEEP_FRAMES/"
 
 # A palette per clip keeps colors true and files small; too big a GIF is
 # made again with fewer colors.
@@ -128,7 +130,9 @@ gif() {
     # A clip may keep only part of what was recorded (see cropTo()).
     [ -e "$(dirname "$list")/crop" ] && crop="crop=$(cat "$(dirname "$list")/crop"),"
     for colors in 256 160 96 64; do
-        ffmpeg -v error -y -f concat -safe 0 -i "$list" \
+        # -reinit_filter 0: crossfaded frames (RGB) among the screenshots
+        # (RGBA) would restart the filters, and the palette keeps only the end.
+        ffmpeg -v error -y -reinit_filter 0 -f concat -safe 0 -i "$list" \
             -vf "${crop}fps=15,split[a][b];[a]palettegen=max_colors=$colors:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
             -loop 0 "$out" || return 1
         [ "$(stat -c %s "$out")" -le "$MAX_GIF" ] && break
@@ -141,6 +145,7 @@ F="$WORK/frames"
 for list in "$F"/*/frames.txt; do
     [ -e "$list" ] || continue
     clip=$(basename "$(dirname "$list")")
+    [ -e "$(dirname "$list")/fades" ] && gjs -m "$ROOT/tools/demo/crossfade.js" "$(dirname "$list")"
     gif "$list" "$OUT/$clip.gif"
 done
 if [ -e "$F/style-cards.png" ]; then
@@ -163,6 +168,12 @@ fi
 if [ -d "$F/looks" ]; then
     mkdir -p "$OUT/looks"
     cp "$F"/looks/*.png "$OUT/looks/" && echo "  $OUT/looks/ ($(ls "$F/looks" | wc -l) stills)"
+    # The popup styles in one picture: four in a column, the big cover beside.
+    P="$F/looks/popup"
+    gjs -m "$ROOT/tools/demo/compose.js" "$F/popup-column.png" 1 \
+        "$P-hover-pointed.png" "$P-countdown.png" "$P-mini.png" "$P-island-pointed.png" &&
+        gjs -m "$ROOT/tools/demo/compose.js" "$OUT/popup-styles.png" 2 "$F/popup-column.png" "$P-big.png" &&
+        echo "  $OUT/popup-styles.png"
 fi
 echo "Done in $(( $(date +%s) - START )) s."
 exit 0

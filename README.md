@@ -82,11 +82,14 @@ To remove Earful: `curl -fsSL https://raw.githubusercontent.com/NGdev2/earful/ma
 <p align="center">
   <img src="docs/media/designs.gif" alt="Switching designs: gradient, glass, vinyl, sound wave, retro equalizer, note road, cassette" width="440">
 </p>
+<p align="center">
+  <img src="docs/media/popups.png" alt="Popups in the vinyl, cassette, note road and retro equalizer designs" width="760">
+</p>
 
 **Popups your way.** Six styles: controls on hover, classic, a Next button with a timer line, a mini pill, an island that grows when you point at it, and a big cover. *Show example* in Settings tries them right away.
 
 <p align="center">
-  <img src="docs/media/popup-styles.gif" alt="The six popup styles one after another" width="440">
+  <img src="docs/media/popup-styles.png" alt="Popup styles: controls on hover, Next button and timer line, mini pill, island, big cover" width="680">
 </p>
 
 **Your rules.** Pause other players when one starts (with exceptions), and send media keys to the last active or a pinned player.
@@ -109,9 +112,6 @@ To remove Earful: `curl -fsSL https://raw.githubusercontent.com/NGdev2/earful/ma
 <p align="center">
   <img src="docs/media/list.gif" alt="List layouts: volume on the cover, one line for progress and volume, two bars" width="440">
   <img src="docs/media/copy.gif" alt="Clicking a title copies it; a long title slides" width="440">
-</p>
-<p align="center">
-  <img src="docs/media/popups.png" alt="Popups in the vinyl, cassette, note road and retro equalizer designs" width="760">
 </p>
 <p align="center">
   <img src="docs/media/settings-pages.png" alt="Earful settings: the Menu, Popups and Behaviour pages" width="820">
