@@ -31,7 +31,7 @@ const SCENES = ['hero', 'menu', 'designs', 'styles', 'progress', 'cards', 'liqui
     'list', 'copy', 'popups', 'settings'];
 const ASKED = (GLib.getenv('EARFUL_DEMO_SCENES') ?? '').split(',')
     .map(s => s.trim()).filter(Boolean);
-// 'popup-styles' only runs when asked for by name.
+// 'popup-styles' and 'looks' only run when asked for by name.
 const wanted = scene => (ASKED.length ? ASKED.includes(scene) : SCENES.includes(scene));
 
 // The popup styles for the 'popup-styles' clip, named as in Settings, and
@@ -506,6 +506,8 @@ export default class DemoDirector extends Extension {
             await this._popupStyles();
         if (wanted('settings'))
             await this._settingsPages();
+        if (wanted('looks'))
+            await this._looks();
     }
 
     /** Hero: track changes pop up, stack, and glide away. */
@@ -978,6 +980,118 @@ export default class DemoDirector extends Extension {
         window.delete(global.get_current_time());
         await wait(500);
         this._settings.set_boolean('toasts-enabled', false);
+    }
+
+    /** The row every looks still shows: the YouTube tab, the same in all. */
+    _looksItem() {
+        return this._item(YOUTUBE) ?? this._items()[0];
+    }
+
+    /** A still of that row, a little around it, to looks/<name>.png. */
+    async _rowShot(name) {
+        await wait(500);
+        await this._shot(`looks/${name}`, grow(bounds(this._looksItem()), 5));
+    }
+
+    /**
+     * Stills of every look for docs/looks.md: card layouts, volume styles,
+     * volume on the cover, list layouts, designs, colors and popup styles.
+     */
+    async _looks() {
+        const settings = this._settings;
+        const mouse = this._mouse;
+        GLib.mkdir_with_parents(`${OUT}/looks`, 0o755);
+        // A title that fits (the copy clip leaves the long one).
+        for (let i = 0; i < 3 && (this._player(YOUTUBE)?.title.length ?? 0) > 24; i++) {
+            await next(YOUTUBE);
+            await wait(800);
+        }
+        settings.set_string('menu-style', 'cards');
+        await this._midSongs();
+        this._earful.menu.open(false);
+        await wait(900);
+        const relayout = async () => {
+            await this._relayout();
+            await this._midSongs();
+        };
+
+        for (const layout of ['standing-volume', 'side-volume', 'slim', 'cover-volume']) {
+            settings.set_string('card-layout', layout);
+            await relayout();
+            await this._rowShot(`card-${layout}`);
+        }
+        settings.set_string('card-layout', 'standing-volume');
+        for (const style of ['led', 'knob', 'pill', 'line']) {
+            settings.set_string('card-volume-style', style);
+            await relayout();
+            await this._rowShot(`volume-${style}`);
+        }
+        settings.reset('card-volume-style');
+
+        // Volume on the cover, as just after a scroll.
+        settings.set_string('card-layout', 'cover-volume');
+        for (const animation of ['liquid', 'cloud', 'dim', 'gray', 'ring', 'frame',
+            'bars', 'percent', 'speaker', 'heart']) {
+            settings.set_string('cover-volume-animation', animation);
+            await relayout();
+            const cover = this._looksItem()._coverVolume;
+            cover?._change(0.62);
+            cover?._linger();
+            await this._rowShot(`cover-${animation}`);
+        }
+        settings.reset('cover-volume-animation');
+        settings.reset('card-layout');
+        await setVolume(YOUTUBE, 0.86);
+
+        for (const design of ['cover', 'glass', 'vinyl', 'wave', 'leds', 'road', 'cassette', 'system']) {
+            settings.set_string('design', design);
+            await relayout();
+            await this._rowShot(`design-${design}`);
+        }
+        settings.set_string('design', 'cover');
+        for (const color of ['purple', 'blue', 'teal', 'green', 'amber', 'red', 'pink', 'graphite']) {
+            settings.set_string('design-color', color);
+            await wait(300);
+            await this._rowShot(`color-${color}`);
+        }
+        settings.reset('design-color');
+        settings.reset('design');
+
+        settings.set_string('menu-style', 'list');
+        for (const layout of ['cover-volume', 'one-line', 'two-bars']) {
+            settings.set_string('list-layout', layout);
+            await relayout();
+            await this._rowShot(`list-${layout}`);
+        }
+        settings.reset('list-layout');
+        settings.reset('menu-style');
+        await this._closeMenu();
+
+        // Popups, at rest and (the ones that change) pointed at.
+        settings.set_boolean('toasts-enabled', true);
+        settings.set_string('toast-position', 'top-right');
+        const popupsOnScreen = () => Main.layoutManager.uiGroup.get_children()
+            .some(a => a.has_style_class_name?.('earful-toast'));
+        for (const [style] of POPUP_STYLES.values) {
+            settings.set_string('popup-style', style);
+            await wait(200);
+            await next(SPOTIFY);
+            await wait(1200);
+            const box = this._popupBox();
+            if (box)
+                await this._shot(`looks/popup-${style}`, box);
+            if (box && POPUP_STYLES.pointed.includes(style)) {
+                // The pointer itself stays hidden.
+                await mouse.moveTo(box[0] + box[2] * 0.4, box[1] + box[3] / 2, 300);
+                await wait(900);
+                await this._shot(`looks/popup-${style}-pointed`, this._popupBox() ?? box);
+                mouse.park();
+            }
+            for (let i = 0; i < 60 && popupsOnScreen(); i++)
+                await wait(150);
+        }
+        settings.reset('popup-style');
+        settings.set_boolean('toasts-enabled', false);
     }
 
     disable() {

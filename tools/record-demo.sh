@@ -10,7 +10,8 @@
 # Needs: gnome-shell, gjs, ffmpeg.
 # Usage: tools/record-demo.sh [out-dir] [scene,...]
 #   Scenes, all by default: hero menu designs styles progress cards liquid
-#   list copy popups settings. popup-styles runs only when named.
+#   list copy popups settings. popup-styles and looks (the stills for
+#   docs/looks.md, into docs/media/looks/) run only when named.
 #   Through make: DEMO_SCENES=cards,list make demo
 
 set -u
@@ -158,6 +159,10 @@ if [ -e "$F/settings-menu.png" ]; then
     cp "$F/settings-menu.png" "$OUT/settings.png" && echo "  $OUT/settings.png"
     gjs -m "$ROOT/tools/demo/compose.js" "$OUT/settings-pages.png" 3 \
         "$F"/settings-{menu,popups,behaviour}.png && echo "  $OUT/settings-pages.png"
+fi
+if [ -d "$F/looks" ]; then
+    mkdir -p "$OUT/looks"
+    cp "$F"/looks/*.png "$OUT/looks/" && echo "  $OUT/looks/ ($(ls "$F/looks" | wc -l) stills)"
 fi
 echo "Done in $(( $(date +%s) - START )) s."
 exit 0
