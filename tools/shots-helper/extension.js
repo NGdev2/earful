@@ -442,6 +442,19 @@ export default class ShotsHelper extends Extension {
             const [r, g, b] = podcast?.coverPalette?.start ?? [];
             result.push(`icon-colors ${r > g && g > b}`);
             await shot('card-icon-colors');
+
+            // Pausing shows the hide button and the title in regular type,
+            // without changing the room the card asks for.
+            const width = earful.menu.box.width;
+            const titleWidth = () => podcast?._title.get_preferred_width(-1)[1];
+            const before = titleWidth();
+            podcast?.player.playPause();
+            await wait(800);
+            const shown = podcast?._dismiss.reactive === true;
+            result.push(`pause-width ${shown && earful.menu.box.width === width &&
+                Math.abs(titleWidth() - before) < 0.5}`);
+            podcast?.player.playPause();
+            await wait(500);
             earful.menu.close(false);
             await wait(400);
         } catch (e) {
@@ -856,7 +869,7 @@ export default class ShotsHelper extends Extension {
         adjustment.value = adjustment.upper;
         await wait(600);
         await shot('many-bottom');
-        const paused = earful._section._getMenuItems().find(i => i._dismiss?.visible);
+        const paused = earful._section._getMenuItems().find(i => i._dismiss?.reactive);
         paused?._dismiss.emit('clicked', 1);
         await wait(600);
         await shot('many-dismissed');

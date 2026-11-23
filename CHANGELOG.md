@@ -20,6 +20,8 @@ New
 Fixed
 - Settings come to the front when they are already open (#6).
 - Long site names end in "…" instead of widening the menu.
+- Pausing a player no longer makes the menu a little wider or narrower.
+- A new popup comes in in its cover's colors instead of changing color as it appears.
 
 ## 0.2.3 (2026-11-05)
 

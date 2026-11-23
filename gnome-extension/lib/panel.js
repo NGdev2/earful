@@ -22,7 +22,7 @@ import {VerticalVolume} from './volumeStyles.js';
 import {CoverVolume} from './coverVolume.js';
 import {DuoBars, SwapLine} from './listBars.js';
 import {SceneLayer} from './scenes.js';
-import {PlayerControls, SourceLine, VERTICAL, scaleFactor} from './widgets.js';
+import {PlayerControls, SourceLine, SteadyLabel, VERTICAL, scaleFactor} from './widgets.js';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -196,14 +196,14 @@ const PlayerItem = GObject.registerClass({
         // Compact rows have no source line.
         this._source = style === 'compact' ? null : new SourceLine('earful-source');
         if (style === 'compact') {
-            this._title = new St.Label({style_class: 'earful-title'});
+            this._title = new SteadyLabel({style_class: 'earful-title'});
             this._artist = new St.Label({style_class: 'earful-artist'});
         } else {
             // Copy with a click (cards by default, list when asked) and let
             // long titles slide on hover.
             const copy = settings.get_boolean(`copy-on-hover-${style}`);
             const scroll = settings.get_boolean('scroll-titles');
-            this._title = new CopyLabel({styleClass: 'earful-title', copy, scroll});
+            this._title = new CopyLabel({styleClass: 'earful-title', copy, scroll, steady: true});
             this._artist = new CopyLabel({styleClass: 'earful-artist', copy, scroll});
         }
         if (this._source)
@@ -226,6 +226,7 @@ const PlayerItem = GObject.registerClass({
         });
 
         // Only on players that aren't playing: hides the row until it plays.
+        // Its room stays while hidden, so pausing doesn't widen the menu.
         this._dismiss = new St.Button({
             style_class: 'earful-control earful-dismiss',
             can_focus: true,
@@ -511,7 +512,8 @@ const PlayerItem = GObject.registerClass({
         this._artist.text = p.artistText;
         this._artist.visible = this._artist.text !== '';
         this._controls.sync();
-        this._dismiss.visible = !p.isPlaying;
+        this._dismiss.child.opacity = p.isPlaying ? 0 : 255;
+        this._dismiss.reactive = this._dismiss.can_focus = !p.isPlaying;
         // Back on the list when it plays again, even while the menu is open.
         this.visible = !p.dismissed;
 

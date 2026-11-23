@@ -10,6 +10,8 @@ import St from 'gi://St';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {SteadyLabel} from './widgets.js';
+
 // Sliding: wait, move at this speed to the end, wait, jump back, repeat.
 const HOLD_MS = 1200;
 const PIXELS_PER_SECOND = 40;
@@ -30,8 +32,10 @@ class CopyLabel extends St.Button {
      * @param {string} options.styleClass the label's class, e.g. 'earful-title'
      * @param {boolean} options.copy whether a click copies the text
      * @param {boolean} options.scroll whether long text slides on hover
+     * @param {boolean} [options.steady] keeps the width of bold text (see
+     *   SteadyLabel)
      */
-    _init({styleClass, copy, scroll}) {
+    _init({styleClass, copy, scroll, steady = false}) {
         super._init({
             style_class: copy ? 'earful-copy earful-copy-on' : 'earful-copy',
             x_align: Clutter.ActorAlign.START,
@@ -48,7 +52,8 @@ class CopyLabel extends St.Button {
         this._timer = 0;
         this._copiedTimer = 0;
 
-        this.textLabel = new St.Label({style_class: styleClass, y_align: Clutter.ActorAlign.CENTER});
+        const Label = steady ? SteadyLabel : St.Label;
+        this.textLabel = new Label({style_class: styleClass, y_align: Clutter.ActorAlign.CENTER});
         // The label is drawn inside this box only, so it can slide past the edge.
         this._clip = new St.BoxLayout({clip_to_allocation: true, x_expand: true});
         this._clip.add_child(this.textLabel);

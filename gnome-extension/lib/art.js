@@ -277,16 +277,21 @@ export const CoverArt = GObject.registerClass({
         this.set_child(this._icon);
         this._corners = new RoundedCorners(radius);
         this._request = null;
+        this._loaded = Promise.resolve();
         /** Colors of the shown cover or app icon, or null for plain colors. */
         this.palette = null;
         this.connect('destroy', () => (this._icon = null));
     }
 
-    /** Shows the player's current cover. */
+    /**
+     * Shows the player's current cover.
+     *
+     * @returns {Promise} settles when the cover (or the icon) is shown
+     */
     setPlayer(player) {
         const request = `${player.trackKey}\n${player.artUrl}`;
         if (request === this._request)
-            return;
+            return this._loaded;
         this._request = request;
 
         // The previous cover stays until the next one is ready, so
@@ -294,7 +299,7 @@ export const CoverArt = GObject.registerClass({
         const appIcon = player.appIcon;
         if (!this.has_style_pseudo_class('cover'))
             this._showIcon(appIcon);
-        loadCover(player.artUrl, player.trackKey).then(cover => {
+        this._loaded = loadCover(player.artUrl, player.trackKey).then(cover => {
             // Still the same track, and not destroyed meanwhile.
             if (this._request !== request || !this._icon)
                 return;
@@ -304,6 +309,7 @@ export const CoverArt = GObject.registerClass({
                 this._showIcon(appIcon);
             this._setPalette(cover ? cover.palette : iconPalette(appIcon));
         });
+        return this._loaded;
     }
 
     _setPalette(palette) {

@@ -4,6 +4,7 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
+import Pango from 'gi://Pango';
 import St from 'gi://St';
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -36,6 +37,31 @@ export function controlButton(iconName, accessibleName, onClick) {
  * Previous, play/pause and next for one player. sync() follows the player:
  * the play/pause icon, and dimmed skip buttons the player can't use.
  */
+/**
+ * A label that asks for the room its text takes in bold, also while it
+ * isn't bold: a title that is bold only while its player plays doesn't
+ * change the menu's width on pause.
+ */
+export const SteadyLabel = GObject.registerClass(
+class SteadyLabel extends St.Label {
+    vfunc_get_preferred_width(forHeight) {
+        const [min, natural] = super.vfunc_get_preferred_width(forHeight);
+        const text = this.clutter_text;
+        if (!text.text || !text.font_name)
+            return [min, natural];
+        // A layout and font of its own: the text's layout depends on its
+        // allocation, which can't be asked for while sizes are worked out.
+        const font = Pango.FontDescription.from_string(text.font_name);
+        const layout = text.create_pango_layout(text.text);
+        layout.set_font_description(font);
+        const [plain] = layout.get_pixel_size();
+        font.set_weight(Pango.Weight.BOLD);
+        layout.set_font_description(font);
+        const [wide] = layout.get_pixel_size();
+        return [min, natural + Math.max(0, wide - plain)];
+    }
+});
+
 export const PlayerControls = GObject.registerClass(
 class PlayerControls extends St.BoxLayout {
     /**

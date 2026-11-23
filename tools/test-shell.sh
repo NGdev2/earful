@@ -178,6 +178,7 @@ if [ -n "$SHOTS" ]; then
     check 'grep -qx "art-dims true" "$C"' "a card's art dims as its volume goes down"
     check 'grep -qx "art-switch true" "$C"' "and stays bright with the switch off"
     check 'grep -qx "icon-colors true" "$C"' "a card without a cover takes the app icon's colors"
+    check 'grep -qx "pause-width true" "$C"' "pausing a player doesn't widen the menu"
     check '! grep -q "^error" "$C"' "card layout test ran without errors"
     L="$SHOTS/list-layouts"
     check 'grep -qx "cover-volume-time-left true" "$L"' "list: volume on the cover with the edge progress"

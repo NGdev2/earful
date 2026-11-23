@@ -40,6 +40,8 @@ const FADE_OUT_MS = 900;
 const HOVER_GRACE_MS = 1500;
 const HOVER_FADE_MS = 160;
 const SWAP_MS = 350;
+// How long a new popup waits for its cover, so it comes in in its colors.
+const COVER_WAIT_MS = 400;
 
 const Toast = GObject.registerClass({
     Signals: {'close-clicked': {}, 'resized': {}},
@@ -132,8 +134,13 @@ const Toast = GObject.registerClass({
             'changed::toast-shadow', () => this._syncShadow(),
             this);
 
+        // Until the first cover is shown the colors change at once: a new
+        // popup comes in in its colors instead of fading into them.
+        this._settled = false;
         this._syncShadow();
         this.showTrack();
+        /** Settles when the first cover is shown. */
+        this.ready = this._art.setPlayer(player).then(() => (this._settled = true));
     }
 
     // Cover, source line, title and artist, with ✕ in the corner.
@@ -382,8 +389,10 @@ const Toast = GObject.registerClass({
         const look = Look.lookFromSettings(this._settings, 'popup-');
         const palette = this._art.palette;
         // The island is always black (stylesheet.css).
-        if (this.styleName !== 'island')
-            this._surface.style = Look.surfaceStyle(look, palette, this.hover);
+        if (this.styleName !== 'island') {
+            const style = Look.surfaceStyle(look, palette, this.hover);
+            this._surface.style = this._settled || !style ? style : `${style} transition-duration: 0ms;`;
+        }
         this._scene?.update(look, palette, this.player.isPlaying);
         this._source?.update(this.player, look.animate, Look.accentColor(look, palette));
         if (this._strip) {
@@ -596,6 +605,30 @@ export class ToastManager {
 
         const fromRight = this._settings.get_string('toast-position').endsWith('right');
         toast.translation_x = (fromRight ? 40 : -40) * scaleFactor();
+        // It slides in once its cover is there (or after a moment), so it
+        // doesn't come in plain and change colors on the way.
+        let waitId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, COVER_WAIT_MS, () => {
+            waitId = 0;
+            this._slideIn(toast);
+            return GLib.SOURCE_REMOVE;
+        });
+        toast.connect('destroy', () => {
+            if (waitId)
+                GLib.source_remove(waitId);
+            waitId = 0;
+        });
+        toast.ready.then(() => {
+            if (!waitId)
+                return;
+            GLib.source_remove(waitId);
+            waitId = 0;
+            this._slideIn(toast);
+        });
+    }
+
+    _slideIn(toast) {
+        if (toast.dismissing)
+            return;
         toast.ease({
             opacity: 255,
             translation_x: 0,
