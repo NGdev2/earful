@@ -72,6 +72,8 @@ To remove Earful: `curl -fsSL https://raw.githubusercontent.com/NGdev2/earful/ma
 
 <p align="center">
   <img src="docs/media/cards.gif" alt="Card layouts and volume styles: LED steps, knob, pill, volume beside the cover, slim, volume on the cover" width="440">
+</p>
+<p align="center">
   <img src="docs/media/liquid.gif" alt="Scrolling on a cover fills it like water" width="374">
 </p>
 
@@ -111,6 +113,8 @@ To remove Earful: `curl -fsSL https://raw.githubusercontent.com/NGdev2/earful/ma
 </p>
 <p align="center">
   <img src="docs/media/list.gif" alt="List layouts: volume on the cover, one line for progress and volume, two bars" width="440">
+</p>
+<p align="center">
   <img src="docs/media/copy.gif" alt="Clicking a title copies it; a long title slides" width="440">
 </p>
 <p align="center">
